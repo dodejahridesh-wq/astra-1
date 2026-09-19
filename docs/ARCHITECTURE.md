@@ -52,3 +52,11 @@ The world model now retains empirical action-to-outcome transitions and predicti
 Prediction is explicitly distinct from observation. A prediction carries its confidence, evidence count, and world-model version. When a prediction is later compared with an observation, the mismatch is retained as a prediction-error record rather than silently rewriting history.
 
 This is intentionally conservative. Astra-1 does not treat a generated forecast as fact, and it does not use low-confidence foresight merely because a model can produce a plausible narrative. The design is informed by recent work on self-evolving world models, episodic/semantic memory, prediction-observation mismatch, and selective foresight.
+
+## Prediction-error-driven world-model revision
+
+Prediction errors are now a controlled learning signal for the explicit world model. Repeated, consistent mismatches can create a new empirical transition hypothesis while preserving the original prediction errors and observations as immutable history.
+
+A revision has an explicit provenance of `prediction-error`, records the superseded and revised outcomes, and keeps the superseded hypothesis marked as `revised`. Repeated evidence updates the active revised hypothesis rather than creating duplicate revisions.
+
+This mechanism revises deployment-time world-model state only; it does not modify foundation-model weights, execute self-directed code changes, or grant additional permissions. Revision remains bounded by an explicit mismatch threshold and is therefore auditable and testable.
