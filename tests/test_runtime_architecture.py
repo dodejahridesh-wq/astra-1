@@ -57,6 +57,55 @@ class RuntimeArchitectureTests(unittest.TestCase):
         uncertain = SelectiveForesight(world).predict("delete_file", min_confidence=0.0)
         self.assertIsNone(uncertain)
 
+    def test_repeated_prediction_errors_revise_hypothesis_without_erasing_history(self):
+        world = WorldModel()
+        predicted = {"status": "ok"}
+        observed = {"status": "error"}
+        world.add_hypothesis(
+            "open_file is expected to produce ok.",
+            confidence=0.9,
+            provenance="inference",
+        )
+        world.hypotheses[-1].update(
+            {
+                "kind": "transition_rule",
+                "action": "open_file",
+                "expected_outcome": predicted,
+                "status": "active",
+            }
+        )
+        world.record_prediction_error(
+            "open_file",
+            predicted,
+            observed,
+            prediction_confidence=0.9,
+        )
+        self.assertEqual(len(world.model_revisions), 0)
+        world.record_prediction_error(
+            "open_file",
+            predicted,
+            observed,
+            prediction_confidence=0.9,
+        )
+
+        self.assertEqual(len(world.prediction_errors), 2)
+        self.assertEqual(len(world.model_revisions), 1)
+        self.assertEqual(world.model_revisions[0]["mismatch_count"], 2)
+        self.assertEqual(world.hypotheses[0]["status"], "revised")
+        revised = world.hypotheses[-1]
+        self.assertEqual(revised["expected_outcome"], observed)
+        self.assertEqual(revised["status"], "active")
+
+        world.record_prediction_error(
+            "open_file",
+            predicted,
+            observed,
+            prediction_confidence=0.9,
+        )
+        self.assertEqual(len(world.prediction_errors), 3)
+        self.assertEqual(len(world.model_revisions), 1)
+        self.assertEqual(world.hypotheses[-1]["evidence_count"], 3)
+
     def test_scheduler_allocates_bounded_profiles(self):
         scheduler = CognitiveScheduler()
         fast = scheduler.schedule("check status")
