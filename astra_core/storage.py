@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -37,6 +37,8 @@ class SQLiteStore:
                     self._migrate_v1_to_v2()
                 elif version == 2:
                     self._migrate_v2_to_v3()
+                elif version == 3:
+                    self._migrate_v3_to_v4()
                 else:
                     raise RuntimeError(f"unsupported Astra-1 schema version: {version}")
                 version += 1
@@ -81,8 +83,16 @@ class SQLiteStore:
                 content TEXT NOT NULL,
                 provenance TEXT NOT NULL,
                 confidence REAL NOT NULL,
+                category TEXT NOT NULL DEFAULT 'general',
+                knowledge_version TEXT NOT NULL DEFAULT 'unknown',
+                status TEXT NOT NULL DEFAULT 'active',
+                valid_from TEXT,
+                valid_until TEXT,
+                supersedes_id INTEGER,
                 created_at TEXT NOT NULL,
-                FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL,
+                FOREIGN KEY(supersedes_id) REFERENCES memory_items(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS world_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,6 +113,8 @@ class SQLiteStore:
                 ON execution_events(execution_id, sequence);
             CREATE INDEX IF NOT EXISTS idx_memory_store
                 ON memory_items(store_name, created_at);
+            CREATE INDEX IF NOT EXISTS idx_memory_active
+                ON memory_items(status, valid_until, confidence, id);
             CREATE INDEX IF NOT EXISTS idx_world_events_created
                 ON world_events(created_at);
         """)
@@ -172,6 +184,28 @@ class SQLiteStore:
                 "UPDATE tasks SET goal_id = ? WHERE id = ?",
                 (int(cur.lastrowid), row["id"]),
             )
+
+    def _migrate_v3_to_v4(self) -> None:
+        memory_columns = self._columns("memory_items")
+        additions = [
+            ("status", "TEXT NOT NULL DEFAULT 'active'"),
+            ("valid_from", "TEXT"),
+            ("valid_until", "TEXT"),
+            ("supersedes_id", "INTEGER"),
+            ("updated_at", "TEXT"),
+        ]
+        for name, definition in additions:
+            if name not in memory_columns:
+                self._conn.execute(
+                    f"ALTER TABLE memory_items ADD COLUMN {name} {definition}"
+                )
+        self._conn.execute(
+            "UPDATE memory_items SET updated_at = created_at WHERE updated_at IS NULL"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memory_active "
+            "ON memory_items(status, valid_until, confidence, id)"
+        )
 
     def create_goal(self, goal: str, priority: int = 0) -> int:
         if not goal or not goal.strip():
@@ -339,29 +373,65 @@ class SQLiteStore:
         execution_id: int | None = None,
         category: str = "general",
         knowledge_version: str = "unknown",
+        status: str = "active",
+        valid_until: str | None = None,
+        supersedes_id: int | None = None,
     ) -> int:
+        if status not in {"active", "superseded", "invalidated"}:
+            raise ValueError("unsupported memory status")
         serialized = content if isinstance(content, str) else json.dumps(content, sort_keys=True)
+        now = utc_now()
         with self._lock, self._conn:
             cur = self._conn.execute(
                 "INSERT INTO memory_items("
                 "execution_id, store_name, content, provenance, confidence, "
-                "category, knowledge_version, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "category, knowledge_version, status, valid_from, valid_until, "
+                "supersedes_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     execution_id, store_name, serialized, provenance, float(confidence),
-                    category, knowledge_version, utc_now(),
+                    category, knowledge_version, status, now, valid_until,
+                    supersedes_id, now, now,
                 ),
             )
-            return int(cur.lastrowid)
+            memory_id = int(cur.lastrowid)
+            if supersedes_id is not None:
+                self._conn.execute(
+                    "UPDATE memory_items SET status = 'superseded', updated_at = ? "
+                    "WHERE id = ?",
+                    (now, supersedes_id),
+                )
+            return memory_id
+
+    def update_memory_status(self, memory_id: int, status: str) -> None:
+        if status not in {"active", "superseded", "invalidated"}:
+            raise ValueError("unsupported memory status")
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE memory_items SET status = ?, updated_at = ? WHERE id = ?",
+                (status, utc_now(), memory_id),
+            )
+
+    def get_memory(self, memory_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM memory_items WHERE id = ?", (memory_id,)
+            ).fetchone()
+        return dict(row) if row else None
 
     def search_memory(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         pattern = "%" + query.lower() + "%"
+        now = utc_now()
         with self._lock:
             rows = self._conn.execute(
-                "SELECT content, provenance, confidence, category, knowledge_version "
-                "FROM memory_items WHERE lower(content) LIKE ? "
+                "SELECT id, content, provenance, confidence, category, knowledge_version, "
+                "status, valid_from, valid_until, supersedes_id "
+                "FROM memory_items "
+                "WHERE lower(content) LIKE ? "
+                "AND status = 'active' "
+                "AND (valid_until IS NULL OR valid_until > ?) "
                 "ORDER BY confidence DESC, id DESC LIMIT ?",
-                (pattern, int(limit)),
+                (pattern, now, int(limit)),
             ).fetchall()
         return [dict(row) for row in rows]
 
