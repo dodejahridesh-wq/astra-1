@@ -75,6 +75,7 @@ class PersistentRuntime:
         *,
         prediction_confidence: float,
         provenance: str = "runtime",
+        source_reliability: float = 1.0,
     ) -> int:
         version = self.world.record_prediction_error(
             action,
@@ -82,6 +83,7 @@ class PersistentRuntime:
             observed,
             prediction_confidence=prediction_confidence,
             provenance=provenance,
+            source_reliability=source_reliability,
         )
         self.store.save_world_snapshot(self.world.snapshot(), self.world.version)
         return version
