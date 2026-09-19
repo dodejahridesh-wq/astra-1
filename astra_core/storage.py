@@ -65,6 +65,15 @@ class SQLiteStore:
                     FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS world_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    execution_id INTEGER,
+                    version INTEGER NOT NULL,
+                    snapshot TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS world_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     execution_id INTEGER,
@@ -181,7 +190,25 @@ class SQLiteStore:
                 result.append(row["event"])
         return result
 
-    def finish_execution(self, execution_id: int, status: str, verified: bool) -> None:
+
+    def save_world_snapshot(self, snapshot: dict[str, Any], version: int, execution_id: int | None = None) -> int:
+        serialized = json.dumps(snapshot, sort_keys=True)
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO world_snapshots(execution_id, version, snapshot, created_at) VALUES (?, ?, ?, ?)",
+                (execution_id, int(version), serialized, utc_now()),
+            )
+            return int(cur.lastrowid)
+
+    def get_latest_world_snapshot(self) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT version, snapshot FROM world_snapshots ORDER BY version DESC, id DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return {"version": row["version"], "snapshot": json.loads(row["snapshot"])}
+\n    def finish_execution(self, execution_id: int, status: str, verified: bool) -> None:
         state = {"completed": "completed", "blocked": "blocked"}.get(status, "failed")
         with self._lock, self._conn:
             self._conn.execute(
