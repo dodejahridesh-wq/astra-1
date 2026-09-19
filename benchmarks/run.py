@@ -39,6 +39,26 @@ with tempfile.TemporaryDirectory() as tmp:
             print(case["id"], "PASS" if ok else "FAIL", "completed" if ok else "failed")
             continue
 
+        if case["category"] == "temporal-executive":
+            intention_id = runtime.create_intention(
+                "execute temporal benchmark step",
+                "event",
+                "temporal.cue",
+                priority=8,
+            )
+            tick = runtime.tick(
+                now="2026-09-20T10:00:00+00:00",
+                event_cues=("temporal.cue",),
+            )
+            ok = (
+                tick.due_intentions == (intention_id,)
+                and tick.completed_intentions == (intention_id,)
+                and runtime.store.get_intention(intention_id)["status"] == "completed"
+            )
+            passed += int(ok)
+            print(case["id"], "PASS" if ok else "FAIL", "completed" if ok else "failed")
+            continue
+
         mode = ExecutionMode.SANDBOX
         if case["category"] == "action-boundary":
             mode = ExecutionMode.LIVE
