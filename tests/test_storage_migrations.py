@@ -114,14 +114,41 @@ class StorageMigrationTests(unittest.TestCase):
                 LATEST_SCHEMA_VERSION,
             )
             row = store._conn.execute(
-                "SELECT category, knowledge_version FROM memory_items"
+                "SELECT category, knowledge_version, status, updated_at FROM memory_items"
             ).fetchone()
             self.assertEqual(row["category"], "general")
             self.assertEqual(row["knowledge_version"], "unknown")
+            self.assertEqual(row["status"], "active")
+            self.assertIsNotNone(row["updated_at"])
             task = store._conn.execute(
                 "SELECT goal_id FROM tasks WHERE goal = 'legacy task'"
             ).fetchone()
             self.assertIsNotNone(task["goal_id"])
+            store.close()
+
+    def test_memory_lifecycle_excludes_invalidated_and_superseded_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            old_id = store.add_memory(
+                "semantic",
+                "the old fact",
+                "source-a",
+                .8,
+            )
+            self.assertEqual(len(store.search_memory("old fact")), 1)
+            new_id = store.add_memory(
+                "semantic",
+                "the revised fact",
+                "source-b",
+                .9,
+                supersedes_id=old_id,
+            )
+            self.assertEqual(store.get_memory(old_id)["status"], "superseded")
+            self.assertEqual(store.get_memory(new_id)["status"], "active")
+            self.assertEqual(len(store.search_memory("old fact")), 0)
+            self.assertEqual(len(store.search_memory("revised fact")), 1)
+            store.update_memory_status(new_id, "invalidated")
+            self.assertEqual(len(store.search_memory("revised fact")), 0)
             store.close()
 
     def test_task_state_is_keyed_and_versioned(self):
