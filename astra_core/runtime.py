@@ -8,7 +8,7 @@ from .governance import assess_action
 from .memory import MemorySystem
 from .modes import ExecutionMode
 from .models import DeterministicProvider, ModelProvider
-from .retrieval import MemoryRetriever
+from .retrieval import SQLiteMemoryRetriever
 from .router import ModelRouter
 from .skills import Skill, SkillRegistry
 from .storage import SQLiteStore
@@ -29,7 +29,7 @@ class PersistentRuntime:
         self.router = ModelRouter(provider or DeterministicProvider())
         self.identity = identity
         self.memory = MemorySystem()
-        self.retriever = MemoryRetriever(self.memory)
+        self.retriever = SQLiteMemoryRetriever(self.store)
         self.world = WorldModel()
         self.skills = SkillRegistry()
 
