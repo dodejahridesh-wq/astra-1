@@ -50,7 +50,7 @@ class AstraRequestHandler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length))
-            result = self.runtime.run(body.get("goal", ""))
+            result = self.runtime.run(body.get("goal", ""), body.get("mode", "sandbox"))
             self._send(200, result)
         except ValueError as exc:
             self._send(400, {"error": str(exc)})
