@@ -14,6 +14,7 @@ class WorldModel:
     assumptions: list[dict[str, Any]] = field(default_factory=list)
     transitions: list[dict[str, Any]] = field(default_factory=list)
     prediction_errors: list[dict[str, Any]] = field(default_factory=list)
+    model_revisions: list[dict[str, Any]] = field(default_factory=list)
     version: int = 0
 
     def observe(self, event: Any, provenance: str = "runtime", confidence: float = 1.0) -> int:
@@ -78,8 +79,66 @@ class WorldModel:
             "provenance": provenance,
         }
         self.prediction_errors.append(error)
+        if not error["matched"]:
+            self._revise_from_prediction_error(error)
         self.version += 1
         return self.version
+
+    def _revise_from_prediction_error(self, error: dict[str, Any], mismatch_threshold: int = 2) -> None:
+        """Revise an empirical hypothesis after repeated, consistent mismatches.
+
+        Observations and prediction errors remain immutable history. A revision adds
+        a new hypothesis and marks the superseded hypothesis as revised; it never
+        rewrites the evidence that caused the revision.
+        """
+        action = error["action"]
+        predicted = error["predicted"]
+        observed = error["observed"]
+        repeated = [
+            item
+            for item in self.prediction_errors
+            if item["action"] == action
+            and item["predicted"] == predicted
+            and item["observed"] == observed
+            and not item["matched"]
+        ]
+        if len(repeated) < mismatch_threshold:
+            return
+
+        active = None
+        for hypothesis in reversed(self.hypotheses):
+            if (
+                hypothesis.get("kind") == "transition_rule"
+                and hypothesis.get("action") == action
+                and hypothesis.get("expected_outcome") == predicted
+                and hypothesis.get("status", "active") == "active"
+            ):
+                active = hypothesis
+                break
+
+        if active is not None:
+            active["status"] = "revised"
+            active["revised_by_mismatch_count"] = len(repeated)
+
+        revision = {
+            "action": action,
+            "superseded_outcome": predicted,
+            "revised_outcome": observed,
+            "mismatch_count": len(repeated),
+            "status": "active",
+            "provenance": "prediction-error",
+        }
+        self.hypotheses.append({
+            "statement": f"{action} is better modeled as producing {observed!r} than {predicted!r}.",
+            "kind": "transition_rule",
+            "action": action,
+            "expected_outcome": observed,
+            "confidence": min(1.0, len(repeated) / (len(repeated) + 1)),
+            "provenance": "prediction-error",
+            "status": "active",
+            "evidence_count": len(repeated),
+        })
+        self.model_revisions.append(revision)
 
     def snapshot(self) -> dict[str, Any]:
         return asdict(self)
