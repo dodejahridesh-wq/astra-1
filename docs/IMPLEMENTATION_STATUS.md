@@ -14,6 +14,7 @@ Status is based on the repository implementation, not the aspirational roadmap.
 - Durable keyed task state with versioning.
 - Task creation, execution association, and resumability.
 - Typed prospective-intention store with time/event/state/manual cues, priorities, lifecycle state, provenance, payloads, and runtime polling/completion APIs.
+- Time-aware temporal executive with durable execution ticks, cue polling, deferred-intention dispatch, and completion/blocking outcomes.
 - Explicit SANDBOX / SIMULATION / LIVE execution modes.
 - Capability-aware governance gate that blocks consequential/external/destructive actions pending authorization.
 - Explicit execution state machine.
