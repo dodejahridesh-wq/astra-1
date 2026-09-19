@@ -40,8 +40,6 @@ class StorageMigrationTests(unittest.TestCase):
                     identity TEXT NOT NULL,
                     goal TEXT NOT NULL,
                     status TEXT NOT NULL,
-                    mode TEXT NOT NULL DEFAULT 'sandbox',
-                    state TEXT NOT NULL DEFAULT 'created',
                     verified INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     completed_at TEXT
@@ -100,6 +98,11 @@ class StorageMigrationTests(unittest.TestCase):
             self.assertEqual(
                 store._conn.execute("SELECT COUNT(*) FROM executions").fetchone()[0], 1
             )
+            execution = store._conn.execute(
+                "SELECT mode, state FROM executions WHERE identity = 'legacy'"
+            ).fetchone()
+            self.assertEqual(execution["mode"], "sandbox")
+            self.assertEqual(execution["state"], "created")
             self.assertEqual(
                 store._conn.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0], 1
             )
