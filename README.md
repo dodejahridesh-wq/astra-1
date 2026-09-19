@@ -31,6 +31,7 @@ Consolidate → Learn
 - Persistent SQLite execution runtime
 - Dependency-free local HTTP API for health, execution, and trace inspection
 - Durable execution/event history
+- Typed prospective-intention store for future cues, priorities, and deferred execution state
 - Explicit SANDBOX / SIMULATION / LIVE execution modes with consequential-action blocking
 - Explicit execution state machine and evidence ledger
 - Pluggable retrieval and model-routing boundaries
