@@ -144,6 +144,21 @@ class SQLiteStore:
             )
             return int(cur.lastrowid)
 
+    def search_memory(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        pattern = "%" + query.lower() + "%"
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT content, provenance, confidence
+                FROM memory_items
+                WHERE lower(content) LIKE ?
+                ORDER BY confidence DESC, id DESC
+                LIMIT ?
+                """,
+                (pattern, int(limit)),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def add_world_event(self, event: Any, execution_id: int | None = None) -> int:
         serialized = event if isinstance(event, str) else json.dumps(event, sort_keys=True)
         with self._lock, self._conn:
