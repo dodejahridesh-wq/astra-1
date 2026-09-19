@@ -9,6 +9,7 @@ from .memory import MemorySystem
 from .modes import ExecutionMode
 from .models import DeterministicProvider, ModelProvider
 from .retrieval import SQLiteMemoryRetriever
+from .scheduling import CognitiveScheduler
 from .router import ModelRouter
 from .skills import Skill, SkillRegistry
 from .storage import SQLiteStore
@@ -33,6 +34,7 @@ class PersistentRuntime:
         snapshot = self.store.get_latest_world_snapshot()
         self.world = WorldModel.from_snapshot(snapshot["snapshot"]) if snapshot else WorldModel()
         self.skills = SkillRegistry()
+        self.scheduler = CognitiveScheduler()
 
     def _emit(self, execution_id: int, sequence: int, stage: str, payload: object) -> dict:
         event = {"sequence": sequence, "stage": stage, "payload": payload}
@@ -63,15 +65,21 @@ class PersistentRuntime:
         evidence = EvidenceLedger()
 
         try:
+            schedule = self.scheduler.schedule(goal)
             events.append(self._emit(execution_id, 1, "Goal", goal))
+            events.append(self._emit(execution_id, 2, "Schedule", {
+                "profile": schedule.profile,
+                "budget": schedule.budget.__dict__,
+                "roles": schedule.roles,
+            }))
             events.append(self._emit(
-                execution_id, 2, "Perceive",
+                execution_id, 3, "Perceive",
                 {"mode": mode.value, "external_side_effects": mode.permits_external_side_effects},
             ))
 
-            memories = self.retriever.retrieve(goal)
+            memories = self.retriever.retrieve(goal, schedule.budget.retrieval_limit)
             events.append(self._emit(
-                execution_id, 3, "Retrieve",
+                execution_id, 4, "Retrieve",
                 [{"provenance": m.provenance, "confidence": m.confidence} for m in memories],
             ))
 
@@ -82,14 +90,14 @@ class PersistentRuntime:
             events.append(self._emit(execution_id, 5, "Plan", plan.text))
 
             events.append(self._emit(
-                execution_id, 6, "Simulate",
+                execution_id, 7, "Simulate",
                 {"mode": ExecutionMode.SIMULATION.value, "external_side_effects": False},
             ))
 
             is_external = mode is ExecutionMode.LIVE
             decision = assess_action("sandbox-demo", external=is_external)
             events.append(self._emit(
-                execution_id, 7, "Act",
+                execution_id, 8, "Act",
                 {"allowed": decision.allowed, "reason": decision.reason, "mode": mode.value},
             ))
 
@@ -146,7 +154,7 @@ class PersistentRuntime:
                 "execution-trace", .95, execution_id
             )
             events.append(self._emit(
-                execution_id, 11, "Consolidate",
+                execution_id, 12, "Consolidate",
                 "Execution trace persisted to episodic memory.",
             ))
 
@@ -154,7 +162,7 @@ class PersistentRuntime:
             self.skills.register_candidate(skill)
             self.skills.evaluate(skill.name, .9)
             events.append(self._emit(
-                execution_id, 12, "Learn",
+                execution_id, 13, "Learn",
                 "Candidate skill evaluated and promoted.",
             ))
 
@@ -162,7 +170,7 @@ class PersistentRuntime:
                 self.identity, "Sandbox execution completed", "execution-trace", .95
             )
             events.append(self._emit(
-                execution_id, 13, "Collective",
+                execution_id, 14, "Collective",
                 {"signature": packet.signature, "provenance": packet.provenance},
             ))
 
