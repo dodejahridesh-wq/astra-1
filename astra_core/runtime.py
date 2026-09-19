@@ -14,6 +14,7 @@ from .router import ModelRouter
 from .skills import Skill, SkillRegistry
 from .storage import SQLiteStore
 from .verification import verify
+
 from .world import WorldModel
 
 
@@ -43,6 +44,50 @@ class PersistentRuntime:
 
     def create_task(self, goal: str) -> int:
         return self.store.create_task(goal)
+
+    def create_intention(
+        self,
+        description: str,
+        cue_type: str,
+        cue_value: str,
+        priority: int = 0,
+        *,
+        due_at: str | None = None,
+        goal_id: int | None = None,
+        task_id: int | None = None,
+        provenance: str = "runtime",
+        payload: object | None = None,
+        status: str = "pending",
+    ) -> int:
+        return self.store.create_intention(
+            description,
+            cue_type,
+            cue_value,
+            priority,
+            due_at=due_at,
+            goal_id=goal_id,
+            task_id=task_id,
+            provenance=provenance,
+            payload=payload,
+            status=status,
+        )
+
+    def poll_intentions(
+        self,
+        cue_type: str,
+        cue_value: str | None = None,
+        *,
+        now: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        return self.store.list_due_intentions(
+            cue_type, cue_value, now=now, limit=limit
+        )
+
+    def complete_intention(self, intention_id: int, execution_id: int | None = None) -> None:
+        self.store.set_intention_status(
+            intention_id, "completed", execution_id=execution_id
+        )
 
     def resume_task(self, task_id: int, mode: ExecutionMode | str = ExecutionMode.SANDBOX) -> dict:
         task = self.store.get_task(task_id)
