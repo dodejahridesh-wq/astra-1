@@ -27,17 +27,17 @@ Status is based on the repository implementation, not the aspirational roadmap.
 - Real model-provider adapters are not yet implemented.
 - Independent external verification is not yet implemented.
 - Retrieval from external/local document corpora is not yet implemented.
-- Simulation is represented by an explicit sandbox stage but is not yet a separate persisted namespace.
+- Simulation has explicit execution-mode boundaries, but the simulation namespace is not yet independently persisted.
 - Collective cognition currently signs a packet but does not yet provide network transport or conflict resolution.
 - The research console is not yet implemented.
 
 ## Next engineering frontier
 
-1. Persist world-model entities, relations, events, and hypotheses.
-2. Introduce an explicit execution/task state machine.
-3. Add model-router/provider adapters without coupling the runtime to one vendor.
-4. Replace substring retrieval with a pluggable retrieval interface.
-5. Separate verification evidence from generated model output.
-6. Add strict LIVE/SANDBOX/SIMULATION execution modes.
+1. Persist world-model entities, relations, events, and hypotheses beyond observations.
+2. Extend the execution state machine into durable task scheduling and resumability.
+3. Add real model-provider adapters without coupling the runtime to one vendor.
+4. Replace substring retrieval with durable indexed/vector-capable retrieval implementations.
+5. Add independent verification providers and evidence-source adapters.
+6. Persist separate LIVE/SANDBOX/SIMULATION namespaces and authorization records.
 7. Expand reproducible cognitive benchmarks.
 8. Build the research API and inspectable execution trace surface.
