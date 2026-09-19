@@ -98,7 +98,7 @@ class PersistentRuntime:
                 self.store.update_execution_state(execution_id, machine.state.value)
                 self.store.finish_execution(execution_id, "blocked", False)
                 if task_id is not None:
-                    self.store.update_task(task_id, "blocked", execution_id)
+                    self.store.set_task_status(task_id, "blocked", execution_id)
                 return {
                     "execution_id": execution_id,
                     "goal": goal,
@@ -169,7 +169,7 @@ class PersistentRuntime:
             machine.transition(ExecutionState.COMPLETED)
             self.store.finish_execution(execution_id, "completed", verification.passed)
             if task_id is not None:
-                self.store.update_task(task_id, "completed", execution_id)
+                self.store.set_task_status(task_id, "completed", execution_id)
             return {
                 "execution_id": execution_id,
                 "goal": goal,
@@ -187,5 +187,5 @@ class PersistentRuntime:
                     machine.transition(ExecutionState.FAILED)
             self.store.finish_execution(execution_id, "failed", False)
             if task_id is not None:
-                self.store.update_task(task_id, "failed", execution_id)
+                self.store.set_task_status(task_id, "failed", execution_id)
             raise
