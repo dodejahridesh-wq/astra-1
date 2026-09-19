@@ -28,6 +28,9 @@ Consolidate → Learn
 ### What is already here
 
 - Deterministic sandbox organism loop
+- Persistent SQLite execution runtime
+- Dependency-free local HTTP API for health, execution, and trace inspection
+- Durable execution/event history
 - Model-provider interface with a reproducible local substrate
 - Working / episodic / semantic / procedural / autobiographical memory model
 - Explicit versioned world model
@@ -62,9 +65,16 @@ Requires Python 3.11+.
 python -m unittest discover -s tests -v
 python -m astra_core.demo
 python benchmarks/run.py
+python -m astra_core.service
 ```
 
-No API key is required for the deterministic sandbox.
+The local service exposes:
+
+- `GET /health`
+- `POST /run` with `{"goal":"..." }`
+- `GET /trace/{execution_id}`
+
+The default persistent database is `data/astra.db`. No API key is required for the deterministic sandbox.
 
 ### Project status
 
