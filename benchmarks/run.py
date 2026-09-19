@@ -23,6 +23,22 @@ with tempfile.TemporaryDirectory() as tmp:
     passed = 0
 
     for case in cases:
+        if case["category"] == "prospective-memory":
+            intention_id = runtime.create_intention(
+                "execute deferred benchmark step",
+                "event",
+                "benchmark.cue",
+                priority=5,
+            )
+            due = runtime.poll_intentions("event", "benchmark.cue")
+            ok = len(due) == 1 and due[0]["id"] == intention_id and due[0]["status"] == "due"
+            if ok:
+                runtime.complete_intention(intention_id)
+                ok = runtime.store.get_intention(intention_id)["status"] == "completed"
+            passed += int(ok)
+            print(case["id"], "PASS" if ok else "FAIL", "completed" if ok else "failed")
+            continue
+
         mode = ExecutionMode.SANDBOX
         if case["category"] == "action-boundary":
             mode = ExecutionMode.LIVE
