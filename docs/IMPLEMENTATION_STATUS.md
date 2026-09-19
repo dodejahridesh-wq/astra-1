@@ -15,7 +15,7 @@ Status is based on the repository implementation, not the aspirational roadmap.
 - Task creation, execution association, and resumability.
 - Typed prospective-intention store with time/event/state/manual cues, priorities, lifecycle state, provenance, payloads, and runtime polling/completion APIs.
 - Time-aware temporal executive with durable execution ticks, cue polling, deferred-intention dispatch, and completion/blocking outcomes.
-- Empirical predictive world-model transitions, prediction-error records, and confidence-gated selective foresight.
+- Empirical predictive world-model transitions, prediction-error records, confidence-gated selective foresight, and bounded prediction-error-driven hypothesis revision.
 - Explicit SANDBOX / SIMULATION / LIVE execution modes.
 - Capability-aware governance gate that blocks consequential/external/destructive actions pending authorization.
 - Explicit execution state machine.
@@ -45,7 +45,7 @@ Status is based on the repository implementation, not the aspirational roadmap.
 1. Add real model-provider adapters behind the existing router/provider boundary.
 2. Replace substring retrieval with indexed/vector-capable retrieval plus memory consolidation and forgetting evaluation.
 3. Add independent verification providers and trajectory-level evidence checks before consequential actions.
-4. Strengthen world-model queries, provenance reconciliation, confidence calibration, selective foresight, and causal assumptions.
+4. Strengthen world-model queries, provenance reconciliation, confidence calibration, selective foresight, causal assumptions, and evidence-weighted revision policies.
 5. Persist separate LIVE/SANDBOX/SIMULATION namespaces and explicit authorization records.
 6. Expand reproducible benchmarks for long-term memory, prospective memory, safety interception, and long-horizon execution.
 7. Build the inspectable research console/API surface and later add collective transport/conflict resolution.
