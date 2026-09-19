@@ -111,12 +111,22 @@ class SQLiteStore:
         return {row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
     def _migrate_v1_to_v2(self) -> None:
-        columns = self._columns("memory_items")
-        if "category" not in columns:
+        execution_columns = self._columns("executions")
+        if "mode" not in execution_columns:
+            self._conn.execute(
+                "ALTER TABLE executions ADD COLUMN mode TEXT NOT NULL DEFAULT 'sandbox'"
+            )
+        if "state" not in execution_columns:
+            self._conn.execute(
+                "ALTER TABLE executions ADD COLUMN state TEXT NOT NULL DEFAULT 'created'"
+            )
+
+        memory_columns = self._columns("memory_items")
+        if "category" not in memory_columns:
             self._conn.execute(
                 "ALTER TABLE memory_items ADD COLUMN category TEXT NOT NULL DEFAULT 'general'"
             )
-        if "knowledge_version" not in columns:
+        if "knowledge_version" not in memory_columns:
             self._conn.execute(
                 "ALTER TABLE memory_items ADD COLUMN knowledge_version TEXT NOT NULL DEFAULT 'unknown'"
             )
