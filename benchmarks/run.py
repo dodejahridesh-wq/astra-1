@@ -1,11 +1,18 @@
 """Run deterministic Astra-1 cognitive benchmarks."""
 import json
+import sys
 import tempfile
 from pathlib import Path
+
+# Allow direct execution from the repository without requiring PYTHONPATH.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from astra_core.modes import ExecutionMode
 from astra_core.runtime import PersistentRuntime
 from astra_core.storage import SQLiteStore
+
 
 with open(Path(__file__).with_name("cases.json"), encoding="utf-8") as f:
     cases = json.load(f)
