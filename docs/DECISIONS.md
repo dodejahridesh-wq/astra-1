@@ -30,3 +30,9 @@ A persistence change is not considered complete until a fresh database reaches t
 Deferred intentions will not be represented solely as episodic memories. Astra-1 uses a typed intention store with explicit cue type, lifecycle, priority, due state, provenance, and execution binding. The store can make an intention eligible when a cue is observed, but it cannot grant action authority or perform consequential actions by itself.
 
 This keeps retrospective memory, prospective intention state, and execution authorization distinct and inspectable.
+
+## Decision: prediction errors revise hypotheses, not history
+
+Prediction errors are retained as immutable evidence. When the same action, predicted outcome, and observed contradictory outcome recur at least twice, Astra-1 may create a provenance-tagged transition-rule revision. The superseded hypothesis is marked revised and the new hypothesis becomes active; subsequent matching evidence updates the existing revision rather than creating duplicates.
+
+This boundary deliberately separates world-model adaptation from model-weight self-modification and from permission changes. Any future adaptive policy must preserve the evidence trail and pass deterministic regression tests.
