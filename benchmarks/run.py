@@ -59,6 +59,20 @@ with tempfile.TemporaryDirectory() as tmp:
             print(case["id"], "PASS" if ok else "FAIL", "completed" if ok else "failed")
             continue
 
+        if case["category"] == "selective-foresight":
+            runtime.record_transition("benchmark.lookup", {"result": "found"})
+            runtime.record_transition("benchmark.lookup", {"result": "found"})
+            runtime.record_transition("benchmark.lookup", {"result": "missing"})
+            prediction = runtime.predict("benchmark.lookup", min_confidence=0.6)
+            ok = (
+                prediction is not None
+                and prediction.predicted_outcome == {"result": "found"}
+                and prediction.confidence >= 0.6
+            )
+            passed += int(ok)
+            print(case["id"], "PASS" if ok else "FAIL", "predicted" if ok else "filtered")
+            continue
+
         mode = ExecutionMode.SANDBOX
         if case["category"] == "action-boundary":
             mode = ExecutionMode.LIVE
