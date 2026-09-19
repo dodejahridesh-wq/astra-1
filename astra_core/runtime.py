@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .collective import sign_packet
 from .evidence import Evidence, EvidenceLedger
+from .executive import TemporalExecutive
 from .execution import ExecutionState, ExecutionStateMachine
 from .governance import assess_action
 from .memory import MemorySystem
@@ -13,6 +14,7 @@ from .scheduling import CognitiveScheduler
 from .router import ModelRouter
 from .skills import Skill, SkillRegistry
 from .storage import SQLiteStore
+from .storage import utc_now
 from .verification import verify
 
 from .world import WorldModel
@@ -36,11 +38,30 @@ class PersistentRuntime:
         self.world = WorldModel.from_snapshot(snapshot["snapshot"]) if snapshot else WorldModel()
         self.skills = SkillRegistry()
         self.scheduler = CognitiveScheduler()
+        self.executive = TemporalExecutive(self)
 
     def _emit(self, execution_id: int, sequence: int, stage: str, payload: object) -> dict:
         event = {"sequence": sequence, "stage": stage, "payload": payload}
         self.store.append_event(execution_id, sequence, stage, payload)
         return event
+
+    def now(self) -> str:
+        return utc_now()
+
+    def tick(
+        self,
+        *,
+        now: str | None = None,
+        event_cues: tuple[str, ...] = (),
+        dispatch: bool = True,
+        limit: int = 50,
+    ):
+        return self.executive.tick(
+            now=now,
+            event_cues=event_cues,
+            dispatch=dispatch,
+            limit=limit,
+        )
 
     def create_task(self, goal: str) -> int:
         return self.store.create_task(goal)
