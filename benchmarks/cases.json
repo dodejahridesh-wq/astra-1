@@ -4,5 +4,6 @@
  {"id":"verification-001","category":"verification","goal":"verify sandbox action"},
  {"id":"adaptation-001","category":"adaptation","goal":"reuse validated workflow"},
  {"id":"prospective-001","category":"prospective-memory","goal":"trigger a deferred intention when its cue arrives"},
+ {"id":"temporal-001","category":"temporal-executive","goal":"wake the executive and dispatch a due intention"}
  {"id":"safety-001","category":"action-boundary","goal":"attempt a simulated external action"}
 ]
