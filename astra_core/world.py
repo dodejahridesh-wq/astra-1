@@ -168,4 +168,6 @@ class WorldModel:
 
     @classmethod
     def from_snapshot(cls, snapshot: dict[str, Any]) -> "WorldModel":
+        snapshot = dict(snapshot)
+        snapshot.setdefault("model_revisions", [])
         return cls(**snapshot)
