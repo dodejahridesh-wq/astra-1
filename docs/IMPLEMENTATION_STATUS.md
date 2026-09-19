@@ -8,13 +8,13 @@ Status is based on the repository implementation, not the aspirational roadmap.
 - Twelve-stage cognitive loop wrapped by the persistent runtime.
 - Durable SQLite execution storage with explicit schema migrations.
 - Durable ordered execution-event traces.
-- Durable episodic-memory records with provenance, confidence, category, and knowledge-version metadata.
+- Durable episodic-memory records with provenance, confidence, category, knowledge-version metadata, and lifecycle controls for validity and supersession.
 - Durable world-model events and versioned snapshots.
 - Durable goals with priority and lifecycle state.
 - Durable keyed task state with versioning.
 - Task creation, execution association, and resumability.
 - Explicit SANDBOX / SIMULATION / LIVE execution modes.
-- Governance gate that blocks consequential/external actions pending authorization.
+- Capability-aware governance gate that blocks consequential/external/destructive actions pending authorization.
 - Explicit execution state machine.
 - Evidence ledger and deterministic verification.
 - Pluggable retrieval and model-routing boundaries.
@@ -40,10 +40,10 @@ Status is based on the repository implementation, not the aspirational roadmap.
 ## Next engineering frontier
 
 1. Add real model-provider adapters behind the existing router/provider boundary.
-2. Replace substring retrieval with durable indexed/vector-capable retrieval implementations.
-3. Add independent verification providers and evidence-source adapters.
-4. Strengthen world-model queries, provenance reconciliation, hypotheses, and causal assumptions.
-5. Persist separate LIVE/SANDBOX/SIMULATION namespaces and explicit authorization records.
-6. Expand reproducible cognitive benchmarks and regression tracking.
-7. Build the inspectable research console/API surface on top of the stable runtime.
-8. Add collective transport and conflict-resolution protocols after the individual runtime is measurably stable.
+2. Add a durable prospective-memory/intention layer for deferred tasks and future cues.
+3. Replace substring retrieval with indexed/vector-capable retrieval plus memory consolidation and forgetting evaluation.
+4. Add independent verification providers and trajectory-level evidence checks before consequential actions.
+5. Strengthen world-model queries, provenance reconciliation, confidence calibration, selective foresight, and causal assumptions.
+6. Persist separate LIVE/SANDBOX/SIMULATION namespaces and explicit authorization records.
+7. Expand reproducible benchmarks for long-term memory, prospective memory, safety interception, and long-horizon execution.
+8. Build the inspectable research console/API surface and later add collective transport/conflict resolution.
