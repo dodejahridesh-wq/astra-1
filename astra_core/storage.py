@@ -113,8 +113,6 @@ class SQLiteStore:
                 ON execution_events(execution_id, sequence);
             CREATE INDEX IF NOT EXISTS idx_memory_store
                 ON memory_items(store_name, created_at);
-            CREATE INDEX IF NOT EXISTS idx_memory_active
-                ON memory_items(status, valid_until, confidence, id);
             CREATE INDEX IF NOT EXISTS idx_world_events_created
                 ON world_events(created_at);
         """)
