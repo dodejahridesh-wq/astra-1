@@ -42,6 +42,19 @@ class RuntimeArchitectureTests(unittest.TestCase):
         response = router.generate("test", "planner")
         self.assertEqual(response.provenance, "sandbox-model")
 
+    def test_selective_foresight_requires_repeated_grounded_transitions(self):
+        world = WorldModel()
+        world.record_transition("open_file", {"status": "ok"})
+        world.record_transition("open_file", {"status": "ok"})
+        world.record_transition("open_file", {"status": "error"})
+        prediction = SelectiveForesight(world).predict("open_file", min_confidence=0.6)
+        self.assertIsNotNone(prediction)
+        self.assertEqual(prediction.predicted_outcome, {"status": "ok"})
+        self.assertAlmostEqual(prediction.confidence, 2 / 3)
+
+        uncertain = SelectiveForesight(world).predict("delete_file", min_confidence=0.0)
+        self.assertIsNone(uncertain)
+
     def test_scheduler_allocates_bounded_profiles(self):
         scheduler = CognitiveScheduler()
         fast = scheduler.schedule("check status")
