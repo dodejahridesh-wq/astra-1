@@ -90,6 +90,46 @@ class PersistenceTests(unittest.TestCase):
             runtime.complete_intention(intention_id)
             store.close()
 
+    def test_temporal_executive_dispatches_due_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            runtime = PersistentRuntime(store=store)
+            intention_id = runtime.create_intention(
+                "verify the deferred artifact",
+                "event",
+                "artifact.ready",
+                priority=10,
+            )
+            tick = runtime.tick(
+                now="2026-09-20T10:00:00+00:00",
+                event_cues=("artifact.ready",),
+            )
+            self.assertEqual(tick.due_intentions, (intention_id,))
+            self.assertEqual(tick.dispatched_intentions, (intention_id,))
+            self.assertEqual(tick.completed_intentions, (intention_id,))
+            self.assertEqual(store.get_intention(intention_id)["status"], "completed")
+            self.assertEqual(len(store.get_executive_ticks()), 1)
+            store.close()
+
+    def test_temporal_executive_can_wake_without_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            runtime = PersistentRuntime(store=store)
+            intention_id = runtime.create_intention(
+                "scheduled review",
+                "time",
+                "2026-09-20T10:00:00+00:00",
+                due_at="2026-09-20T10:00:00+00:00",
+            )
+            tick = runtime.tick(
+                now="2026-09-20T10:01:00+00:00",
+                dispatch=False,
+            )
+            self.assertEqual(tick.due_intentions, (intention_id,))
+            self.assertEqual(tick.dispatched_intentions, ())
+            self.assertEqual(store.get_intention(intention_id)["status"], "due")
+            store.close()
+
     def test_task_can_be_resumed(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteStore(Path(tmp) / "astra.db")
