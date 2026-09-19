@@ -23,9 +23,22 @@ class PersistenceTests(unittest.TestCase):
             saved = reopened.get_execution(execution_id)
             self.assertIsNotNone(saved)
             self.assertEqual(saved["status"], "completed")
+            self.assertEqual(saved["state"], "completed")
+            self.assertEqual(saved["mode"], "sandbox")
             self.assertTrue(saved["verified"])
             self.assertEqual(len(saved["events"]), 13)
+            self.assertEqual(len(reopened.get_world_events()), 1)
             reopened.close()
+
+    def test_live_mode_is_blocked_without_authorization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            result = PersistentRuntime(store=store).run("attempt external action", "live")
+            self.assertEqual(result["status"], "blocked")
+            saved = store.get_execution(result["execution_id"])
+            self.assertEqual(saved["state"], "blocked")
+            self.assertFalse(saved["verified"])
+            store.close()
 
     def test_health_and_run_http_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
