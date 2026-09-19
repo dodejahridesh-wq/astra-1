@@ -48,7 +48,6 @@ class PersistentRuntime:
             raise ValueError("unknown task")
         if task["status"] == "completed":
             return {"task_id": task_id, "status": "completed", "execution_id": task["execution_id"]}
-        self.store.update_task(task_id, "resuming", task["execution_id"])
         result = self.run(task["goal"], mode, task_id=task_id)
         return {**result, "task_id": task_id, "resumed": True}
 
