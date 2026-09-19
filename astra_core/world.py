@@ -105,6 +105,29 @@ class WorldModel:
         if len(repeated) < mismatch_threshold:
             return
 
+        existing = None
+        for hypothesis in reversed(self.hypotheses):
+            if (
+                hypothesis.get("kind") == "transition_rule"
+                and hypothesis.get("action") == action
+                and hypothesis.get("expected_outcome") == observed
+                and hypothesis.get("status", "active") == "active"
+            ):
+                existing = hypothesis
+                break
+        if existing is not None:
+            existing["evidence_count"] = len(repeated)
+            existing["confidence"] = min(1.0, len(repeated) / (len(repeated) + 1))
+            for revision in reversed(self.model_revisions):
+                if (
+                    revision["action"] == action
+                    and revision["superseded_outcome"] == predicted
+                    and revision["revised_outcome"] == observed
+                ):
+                    revision["mismatch_count"] = len(repeated)
+                    break
+            return
+
         active = None
         for hypothesis in reversed(self.hypotheses):
             if (
