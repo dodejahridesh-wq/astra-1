@@ -23,7 +23,7 @@ Status is based on the repository implementation, not the aspirational roadmap.
 ## Partial / experimental
 
 - Memory retrieval is currently in-process and simple substring matching.
-- World-model persistence is not yet durable.
+- World-model entities, relations, events, hypotheses, assumptions, and versioned snapshots are durably persisted.
 - Real model-provider adapters are not yet implemented.
 - Independent external verification is not yet implemented.
 - Retrieval from external/local document corpora is not yet implemented.
@@ -33,7 +33,7 @@ Status is based on the repository implementation, not the aspirational roadmap.
 
 ## Next engineering frontier
 
-1. Persist world-model entities, relations, events, and hypotheses beyond observations.
+1. Extend durable world-model persistence with richer query/index capabilities and conflict-aware updates.
 2. Extend the execution state machine into durable task scheduling and resumability.
 3. Add real model-provider adapters without coupling the runtime to one vendor.
 4. Replace substring retrieval with durable indexed/vector-capable retrieval implementations.
