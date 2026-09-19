@@ -10,6 +10,8 @@ from astra_core.memory import MemorySystem
 from astra_core.models import DeterministicProvider
 from astra_core.router import ModelRouter
 from astra_core.scheduling import CognitiveScheduler
+from astra_core.world import WorldModel
+from astra_core.foresight import SelectiveForesight
 
 
 class RuntimeArchitectureTests(unittest.TestCase):
