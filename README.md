@@ -70,6 +70,10 @@ No API key is required for the deterministic sandbox.
 
 **Early research / experimental.** The current implementation is intentionally small and inspectable. It is not presented as AGI or a production autonomous system.
 
+### Discover and share
+
+A public landing page is available in [`docs/index.html`](docs/index.html). The project also includes a [public outreach plan](docs/MARKETING.md), [launch draft](docs/LAUNCH_POST.md), [social copy](marketing/SOCIAL_COPY.md), and [GitHub growth setup](docs/GITHUB_SETUP.md).
+
 ### Get involved
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md), explore the [architecture](docs/ARCHITECTURE.md), review the [roadmap](docs/ROADMAP.md), and open an Issue or Discussion with experiments, critiques, benchmark ideas, or implementation proposals.
