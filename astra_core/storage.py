@@ -31,7 +31,7 @@ class SQLiteStore:
                 """
                 PRAGMA foreign_keys = ON;
 
-                CREATE TABLE IF NOT EXISTS executions (
+                CREATE TABLE IF NOT EXISTS tasks (\n                    id INTEGER PRIMARY KEY AUTOINCREMENT,\n                    goal TEXT NOT NULL,\n                    status TEXT NOT NULL DEFAULT 'queued',\n                    attempts INTEGER NOT NULL DEFAULT 0,\n                    execution_id INTEGER,\n                    created_at TEXT NOT NULL,\n                    updated_at TEXT NOT NULL\n                );\n\n                CREATE TABLE IF NOT EXISTS executions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     identity TEXT NOT NULL,
                     goal TEXT NOT NULL,
@@ -103,7 +103,28 @@ class SQLiteStore:
                     "ALTER TABLE executions ADD COLUMN state TEXT NOT NULL DEFAULT 'created'"
                 )
 
-    def create_execution(self, identity: str, goal: str, mode: str = "sandbox") -> int:
+    def create_task(self, goal: str) -> int:
+        now = utc_now()
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO tasks(goal, status, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                (goal, "queued", now, now),
+            )
+            return int(cur.lastrowid)
+
+    def update_task(self, task_id: int, status: str, execution_id: int | None = None) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE tasks SET status = ?, attempts = attempts + 1, execution_id = ?, updated_at = ? WHERE id = ?",
+                (status, execution_id, utc_now(), task_id),
+            )
+
+    def get_task(self, task_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return dict(row) if row else None
+
+    def create_execution(self, identity: str, goal: str, mode: str = "sandbox", task_id: int | None = None) -> int:
         now = utc_now()
         with self._lock, self._conn:
             cur = self._conn.execute(
@@ -113,7 +134,13 @@ class SQLiteStore:
                 """,
                 (identity, goal, "running", mode, "running", now),
             )
-            return int(cur.lastrowid)
+            execution_id = int(cur.lastrowid)
+            if task_id is not None:
+                self._conn.execute(
+                    "UPDATE tasks SET execution_id = ?, status = ?, attempts = attempts + 1, updated_at = ? WHERE id = ?",
+                    (execution_id, "running", now, task_id),
+                )
+            return execution_id
 
     def update_execution_state(self, execution_id: int, state: str) -> None:
         with self._lock, self._conn:
