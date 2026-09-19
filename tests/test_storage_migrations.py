@@ -24,6 +24,11 @@ class StorageMigrationTests(unittest.TestCase):
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='intentions'"
                 ).fetchone()
             )
+            self.assertIsNotNone(
+                store._conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='executive_ticks'"
+                ).fetchone()
+            )
             store.close()
 
     def test_legacy_remote_schema_migrates_without_data_loss(self):
@@ -129,6 +134,10 @@ class StorageMigrationTests(unittest.TestCase):
                 "SELECT goal_id FROM tasks WHERE goal = 'legacy task'"
             ).fetchone()
             self.assertIsNotNone(task["goal_id"])
+            self.assertEqual(
+                store._conn.execute("SELECT COUNT(*) FROM executive_ticks").fetchone()[0],
+                0,
+            )
             store.close()
 
     def test_memory_lifecycle_excludes_invalidated_and_superseded_records(self):
