@@ -19,6 +19,11 @@ class StorageMigrationTests(unittest.TestCase):
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='goals'"
                 ).fetchone()
             )
+            self.assertIsNotNone(
+                store._conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='intentions'"
+                ).fetchone()
+            )
             store.close()
 
     def test_legacy_remote_schema_migrates_without_data_loss(self):
@@ -149,6 +154,46 @@ class StorageMigrationTests(unittest.TestCase):
             self.assertEqual(len(store.search_memory("revised fact")), 1)
             store.update_memory_status(new_id, "invalidated")
             self.assertEqual(len(store.search_memory("revised fact")), 0)
+            store.close()
+
+    def test_prospective_intention_store_is_typed_and_triggerable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            task_id = store.create_task("remember to verify")
+            intention_id = store.create_intention(
+                "Verify the saved artifact",
+                "event",
+                "artifact.ready",
+                priority=9,
+                task_id=task_id,
+                payload={"artifact": "demo.txt"},
+            )
+            intention = store.get_intention(intention_id)
+            self.assertEqual(intention["status"], "pending")
+            self.assertEqual(intention["cue_type"], "event")
+            due = store.list_due_intentions("event", "artifact.ready")
+            self.assertEqual(len(due), 1)
+            self.assertEqual(due[0]["id"], intention_id)
+            self.assertEqual(store.get_intention(intention_id)["status"], "due")
+            store.set_intention_status(intention_id, "completed")
+            self.assertEqual(store.get_intention(intention_id)["status"], "completed")
+            store.close()
+
+    def test_time_intention_uses_due_at_without_context_injection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            intention_id = store.create_intention(
+                "Perform the scheduled review",
+                "time",
+                "2026-09-20T10:00:00+00:00",
+                due_at="2026-09-20T10:00:00+00:00",
+            )
+            due = store.list_due_intentions(
+                "time",
+                now="2026-09-20T10:01:00+00:00",
+            )
+            self.assertEqual([item["id"] for item in due], [intention_id])
+            self.assertEqual(store.get_intention(intention_id)["status"], "due")
             store.close()
 
     def test_task_state_is_keyed_and_versioned(self):
