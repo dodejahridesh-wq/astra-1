@@ -12,4 +12,6 @@ jobs:
       - name: Run unit and integration tests
         run: python -m unittest discover -s tests -v
       - name: Run deterministic benchmarks
+        env:
+          PYTHONPATH: .
         run: python benchmarks/run.py
