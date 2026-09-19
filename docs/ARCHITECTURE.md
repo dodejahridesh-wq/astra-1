@@ -32,3 +32,15 @@ Astra-1 treats deferred intentions as a distinct durable state type rather than 
 The runtime exposes creation, cue polling, and completion operations. Polling is an explicit trigger step: an intention becomes `due` only when its typed cue is observed. The intention store does not itself authorize or perform consequential actions.
 
 This separation reflects current prospective-memory research: deferred intentions require future-cue detection and lifecycle management, while long-term memory research shows that retrospective recall alone does not guarantee reliable future behavior.
+
+## Temporal executive
+
+The temporal executive is the wake-up boundary between durable prospective state and cognitive execution. A tick records the observed time, resolves eligible time/event cues, and optionally dispatches due intentions through the ordinary persistent runtime.
+
+Every tick is durable and auditable. Dispatch does not bypass task state, execution state, simulation boundaries, verification, or governance. A failed or blocked execution leaves the intention non-completed rather than silently treating attempted work as success.
+
+This gives Astra-1 an explicit temporal loop:
+
+**Persist intention → observe cue → mark due → dispatch → execute → verify → complete or block → persist tick.**
+
+A future scheduler may invoke ticks from a clock, event stream, or external orchestrator; the core executive itself remains deterministic and testable.
