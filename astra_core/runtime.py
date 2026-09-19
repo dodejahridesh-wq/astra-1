@@ -114,8 +114,9 @@ class PersistentRuntime:
                 "allowed": decision.allowed,
                 "mode": mode.value,
             }
-            self.world.observe(observed)
+            self.world.observe(observed, provenance="runtime", confidence=.95)
             self.store.add_world_event(observed, execution_id)
+            self.store.save_world_snapshot(self.world.snapshot(), self.world.version, execution_id)
             evidence.add(Evidence("world-model", observed, "observed", .95))
             events.append(self._emit(execution_id, 8, "Observe", observed))
 
