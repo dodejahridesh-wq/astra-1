@@ -126,7 +126,7 @@ class PersistentRuntime:
             self.store.add_world_event(observed, execution_id)
             self.store.save_world_snapshot(self.world.snapshot(), self.world.version, execution_id)
             evidence.add(Evidence("world-model", observed, "observed", .95))
-            events.append(self._emit(execution_id, 8, "Observe", observed))
+            events.append(self._emit(execution_id, 9, "Observe", observed))
 
             machine.transition(ExecutionState.VERIFYING)
             self.store.update_execution_state(execution_id, machine.state.value)
@@ -139,10 +139,10 @@ class PersistentRuntime:
                 evidence.add(Evidence(
                     "execution-trace", verification.notes, "verified", .90
                 ))
-            events.append(self._emit(execution_id, 9, "Verify", verification.notes))
+            events.append(self._emit(execution_id, 10, "Verify", verification.notes))
 
             reflection = self.router.generate(goal, "reflector")
-            events.append(self._emit(execution_id, 10, "Reflect", reflection.text))
+            events.append(self._emit(execution_id, 11, "Reflect", reflection.text))
 
             trace_payload = [dict(event) for event in events]
             self.memory.add(
