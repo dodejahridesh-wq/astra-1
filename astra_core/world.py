@@ -69,12 +69,21 @@ class WorldModel:
         *,
         prediction_confidence: float,
         provenance: str = "runtime",
+        source_reliability: float = 1.0,
     ) -> int:
+        source_reliability = float(source_reliability)
+        if not 0.0 <= source_reliability <= 1.0:
+            raise ValueError("source_reliability must be between 0 and 1")
+        prediction_confidence = float(prediction_confidence)
+        if not 0.0 <= prediction_confidence <= 1.0:
+            raise ValueError("prediction_confidence must be between 0 and 1")
         error = {
             "action": action,
             "predicted": predicted,
             "observed": observed,
-            "prediction_confidence": float(prediction_confidence),
+            "prediction_confidence": prediction_confidence,
+            "source_reliability": source_reliability,
+            "evidence_weight": prediction_confidence * source_reliability,
             "matched": predicted == observed,
             "provenance": provenance,
         }
@@ -84,25 +93,77 @@ class WorldModel:
         self.version += 1
         return self.version
 
-    def _revise_from_prediction_error(self, error: dict[str, Any], mismatch_threshold: int = 2) -> None:
-        """Revise an empirical hypothesis after repeated, consistent mismatches.
+    def _revise_from_prediction_error(
+        self,
+        error: dict[str, Any],
+        mismatch_threshold: int = 2,
+        min_revision_confidence: float = 0.65,
+        min_margin: float = 0.20,
+    ) -> None:
+        """Revise only when weighted evidence distinguishes competing outcomes.
 
-        Observations and prediction errors remain immutable history. A revision adds
-        a new hypothesis and marks the superseded hypothesis as revised; it never
-        rewrites the evidence that caused the revision.
+        Prediction errors are immutable evidence. Evidence weight combines the
+        confidence of the original prediction with the reliability assigned to
+        its source. When competing observed outcomes remain too close, the
+        world model explicitly abstains instead of selecting a hypothesis.
         """
         action = error["action"]
         predicted = error["predicted"]
-        observed = error["observed"]
         repeated = [
             item
             for item in self.prediction_errors
             if item["action"] == action
             and item["predicted"] == predicted
-            and item["observed"] == observed
             and not item["matched"]
         ]
         if len(repeated) < mismatch_threshold:
+            return
+
+        weights: dict[str, float] = {}
+        examples: dict[str, Any] = {}
+        counts: dict[str, int] = {}
+        for item in repeated:
+            key = repr(item["observed"])
+            weights[key] = weights.get(key, 0.0) + float(
+                item.get("evidence_weight", item.get("prediction_confidence", 1.0))
+            )
+            examples[key] = item["observed"]
+            counts[key] = counts.get(key, 0) + 1
+
+        ranked = sorted(weights.items(), key=lambda pair: (-pair[1], pair[0]))
+        total_weight = sum(weights.values())
+        winner_key, winner_weight = ranked[0]
+        second_weight = ranked[1][1] if len(ranked) > 1 else 0.0
+        revision_confidence = winner_weight / total_weight if total_weight else 0.0
+        margin = (
+            (winner_weight - second_weight) / total_weight
+            if total_weight
+            else 0.0
+        )
+        winner = examples[winner_key]
+
+        if (
+            len(ranked) > 1
+            and (
+                revision_confidence < min_revision_confidence
+                or margin < min_margin
+            )
+        ):
+            self.model_revisions.append({
+                "action": action,
+                "superseded_outcome": predicted,
+                "revised_outcome": None,
+                "mismatch_count": len(repeated),
+                "status": "abstained",
+                "provenance": "prediction-error",
+                "revision_confidence": revision_confidence,
+                "evidence_weight": winner_weight,
+                "competing_outcomes": [
+                    {"outcome": examples[key], "evidence_weight": weight, "count": counts[key]}
+                    for key, weight in ranked
+                ],
+                "reason": "competing evidence could not be distinguished",
+            })
             return
 
         existing = None
@@ -110,21 +171,25 @@ class WorldModel:
             if (
                 hypothesis.get("kind") == "transition_rule"
                 and hypothesis.get("action") == action
-                and hypothesis.get("expected_outcome") == observed
+                and hypothesis.get("expected_outcome") == winner
                 and hypothesis.get("status", "active") == "active"
             ):
                 existing = hypothesis
                 break
         if existing is not None:
-            existing["evidence_count"] = len(repeated)
-            existing["confidence"] = min(1.0, len(repeated) / (len(repeated) + 1))
+            existing["evidence_count"] = counts[winner_key]
+            existing["evidence_weight"] = winner_weight
+            existing["confidence"] = revision_confidence
             for revision in reversed(self.model_revisions):
                 if (
                     revision["action"] == action
                     and revision["superseded_outcome"] == predicted
-                    and revision["revised_outcome"] == observed
+                    and revision["revised_outcome"] == winner
+                    and revision["status"] == "active"
                 ):
                     revision["mismatch_count"] = len(repeated)
+                    revision["revision_confidence"] = revision_confidence
+                    revision["evidence_weight"] = winner_weight
                     break
             return
 
@@ -146,20 +211,27 @@ class WorldModel:
         revision = {
             "action": action,
             "superseded_outcome": predicted,
-            "revised_outcome": observed,
+            "revised_outcome": winner,
             "mismatch_count": len(repeated),
             "status": "active",
             "provenance": "prediction-error",
+            "revision_confidence": revision_confidence,
+            "evidence_weight": winner_weight,
+            "competing_outcomes": [
+                {"outcome": examples[key], "evidence_weight": weight, "count": counts[key]}
+                for key, weight in ranked
+            ],
         }
         self.hypotheses.append({
-            "statement": f"{action} is better modeled as producing {observed!r} than {predicted!r}.",
+            "statement": f"{action} is better modeled as producing {winner!r} than {predicted!r}.",
             "kind": "transition_rule",
             "action": action,
-            "expected_outcome": observed,
-            "confidence": min(1.0, len(repeated) / (len(repeated) + 1)),
+            "expected_outcome": winner,
+            "confidence": revision_confidence,
+            "evidence_weight": winner_weight,
             "provenance": "prediction-error",
             "status": "active",
-            "evidence_count": len(repeated),
+            "evidence_count": counts[winner_key],
         })
         self.model_revisions.append(revision)
 
