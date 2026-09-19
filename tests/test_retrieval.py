@@ -16,6 +16,8 @@ class DurableRetrievalTests(unittest.TestCase):
                 "Astra persistent cognitive architecture",
                 "research-note",
                 .91,
+                category="architecture",
+                knowledge_version="v1",
             )
             store.close()
 
@@ -23,6 +25,8 @@ class DurableRetrievalTests(unittest.TestCase):
             results = SQLiteMemoryRetriever(reopened).retrieve("cognitive")
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0].provenance, "research-note")
+            self.assertEqual(results[0].category, "architecture")
+            self.assertEqual(results[0].knowledge_version, "v1")
             self.assertAlmostEqual(results[0].confidence, .91)
             reopened.close()
 
