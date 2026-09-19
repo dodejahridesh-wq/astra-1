@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .collective import sign_packet
 from .evidence import Evidence, EvidenceLedger
+from .foresight import SelectiveForesight
 from .executive import TemporalExecutive
 from .execution import ExecutionState, ExecutionStateMachine
 from .governance import assess_action
@@ -39,6 +40,7 @@ class PersistentRuntime:
         self.skills = SkillRegistry()
         self.scheduler = CognitiveScheduler()
         self.executive = TemporalExecutive(self)
+        self.foresight = SelectiveForesight(self.world)
 
     def _emit(self, execution_id: int, sequence: int, stage: str, payload: object) -> dict:
         event = {"sequence": sequence, "stage": stage, "payload": payload}
@@ -47,6 +49,42 @@ class PersistentRuntime:
 
     def now(self) -> str:
         return utc_now()
+
+    def predict(self, action: str, min_confidence: float = 0.6):
+        return self.foresight.predict(action, min_confidence)
+
+    def record_transition(
+        self,
+        action: str,
+        outcome: object,
+        *,
+        provenance: str = "observation",
+        confidence: float = 1.0,
+    ) -> int:
+        version = self.world.record_transition(
+            action, outcome, provenance=provenance, confidence=confidence
+        )
+        self.store.save_world_snapshot(self.world.snapshot(), self.world.version)
+        return version
+
+    def record_prediction_error(
+        self,
+        action: str,
+        predicted: object,
+        observed: object,
+        *,
+        prediction_confidence: float,
+        provenance: str = "runtime",
+    ) -> int:
+        version = self.world.record_prediction_error(
+            action,
+            predicted,
+            observed,
+            prediction_confidence=prediction_confidence,
+            provenance=provenance,
+        )
+        self.store.save_world_snapshot(self.world.snapshot(), self.world.version)
+        return version
 
     def tick(
         self,
