@@ -1,15 +1,15 @@
-"""Persistent execution runtime for Astra-1.
-
-This module is the bridge from the original in-memory prototype to a durable
-cognitive runtime. It deliberately uses the existing deterministic organism
-components rather than hiding cognition inside the persistence layer.
-"""
+"""Persistent execution runtime for Astra-1."""
 from __future__ import annotations
 
 from .collective import sign_packet
+from .evidence import Evidence, EvidenceLedger
+from .execution import ExecutionState, ExecutionStateMachine
 from .governance import assess_action
 from .memory import MemorySystem
+from .modes import ExecutionMode
 from .models import DeterministicProvider, ModelProvider
+from .retrieval import MemoryRetriever
+from .router import ModelRouter
 from .skills import Skill, SkillRegistry
 from .storage import SQLiteStore
 from .verification import verify
@@ -17,7 +17,7 @@ from .world import WorldModel
 
 
 class PersistentRuntime:
-    """Run the Astra cognitive loop while persisting execution state."""
+    """Run the cognitive loop with durable execution state and explicit boundaries."""
 
     def __init__(
         self,
@@ -26,9 +26,10 @@ class PersistentRuntime:
         identity: str = "astra-1-runtime",
     ):
         self.store = store or SQLiteStore()
-        self.provider = provider or DeterministicProvider()
+        self.router = ModelRouter(provider or DeterministicProvider())
         self.identity = identity
         self.memory = MemorySystem()
+        self.retriever = MemoryRetriever(self.memory)
         self.world = WorldModel()
         self.skills = SkillRegistry()
 
@@ -37,57 +38,86 @@ class PersistentRuntime:
         self.store.append_event(execution_id, sequence, stage, payload)
         return event
 
-    def run(self, goal: str) -> dict:
+    def run(self, goal: str, mode: ExecutionMode | str = ExecutionMode.SANDBOX) -> dict:
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError("goal must be a non-empty string")
+        mode = ExecutionMode(mode)
+        machine = ExecutionStateMachine()
+        execution_id = self.store.create_execution(self.identity, goal, mode.value)
+        machine.transition(ExecutionState.RUNNING)
 
-        execution_id = self.store.create_execution(self.identity, goal)
         events: list[dict] = []
+        evidence = EvidenceLedger()
 
         try:
             events.append(self._emit(execution_id, 1, "Goal", goal))
             events.append(self._emit(
                 execution_id, 2, "Perceive",
-                "Received goal and initialized persistent runtime state.",
+                {"mode": mode.value, "external_side_effects": mode.permits_external_side_effects},
             ))
 
-            memories = self.memory.retrieve(goal)
+            memories = self.retriever.retrieve(goal)
             events.append(self._emit(
-                execution_id, 3, "Retrieve", f"{len(memories)} relevant in-process memories"
+                execution_id, 3, "Retrieve",
+                [{"provenance": m.provenance, "confidence": m.confidence} for m in memories],
             ))
 
-            model = self.provider.generate(goal)
+            model = self.router.generate(goal)
             events.append(self._emit(execution_id, 4, "Model", model.text))
 
-            plan = self.provider.generate(goal, "planner")
+            plan = self.router.generate(goal, "planner")
             events.append(self._emit(execution_id, 5, "Plan", plan.text))
 
             events.append(self._emit(
                 execution_id, 6, "Simulate",
-                {"mode": "simulation", "external_side_effects": False},
+                {"mode": ExecutionMode.SIMULATION.value, "external_side_effects": False},
             ))
 
-            decision = assess_action("sandbox-demo")
+            is_external = mode is ExecutionMode.LIVE
+            decision = assess_action("sandbox-demo", external=is_external)
             events.append(self._emit(
                 execution_id, 7, "Act",
-                {"allowed": decision.allowed, "reason": decision.reason},
+                {"allowed": decision.allowed, "reason": decision.reason, "mode": mode.value},
             ))
+
+            if not decision.allowed:
+                machine.transition(ExecutionState.BLOCKED)
+                self.store.update_execution_state(execution_id, machine.state.value)
+                self.store.finish_execution(execution_id, "blocked", False)
+                return {
+                    "execution_id": execution_id,
+                    "goal": goal,
+                    "mode": mode.value,
+                    "status": "blocked",
+                    "verified": False,
+                    "trace": events,
+                }
 
             observed = {
                 "goal": goal,
                 "action": "sandbox-demo",
                 "allowed": decision.allowed,
+                "mode": mode.value,
             }
             self.world.observe(observed)
+            self.store.add_world_event(observed, execution_id)
+            evidence.add(Evidence("world-model", observed, "observed", .95))
             events.append(self._emit(execution_id, 8, "Observe", observed))
+
+            machine.transition(ExecutionState.VERIFYING)
+            self.store.update_execution_state(execution_id, machine.state.value)
 
             verification = verify(
                 [{"stage": e["stage"], "payload": e["payload"]} for e in events],
                 "sandbox-demo",
             )
+            if verification.passed:
+                evidence.add(Evidence(
+                    "execution-trace", verification.notes, "verified", .90
+                ))
             events.append(self._emit(execution_id, 9, "Verify", verification.notes))
 
-            reflection = self.provider.generate(goal, "reflector")
+            reflection = self.router.generate(goal, "reflector")
             events.append(self._emit(execution_id, 10, "Reflect", reflection.text))
 
             trace_payload = [dict(event) for event in events]
@@ -120,14 +150,22 @@ class PersistentRuntime:
                 {"signature": packet.signature, "provenance": packet.provenance},
             ))
 
+            machine.transition(ExecutionState.COMPLETED)
             self.store.finish_execution(execution_id, "completed", verification.passed)
             return {
                 "execution_id": execution_id,
                 "goal": goal,
+                "mode": mode.value,
                 "status": "completed",
                 "verified": verification.passed,
+                "evidence": [e.__dict__ for e in evidence.all()],
                 "trace": events,
             }
         except Exception:
+            if machine.state not in {ExecutionState.COMPLETED, ExecutionState.BLOCKED}:
+                if machine.state is ExecutionState.CREATED:
+                    machine.transition(ExecutionState.RUNNING)
+                if machine.state in {ExecutionState.RUNNING, ExecutionState.VERIFYING}:
+                    machine.transition(ExecutionState.FAILED)
             self.store.finish_execution(execution_id, "failed", False)
             raise
