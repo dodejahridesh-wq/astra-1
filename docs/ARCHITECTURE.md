@@ -23,3 +23,12 @@ This is intentionally a local research service, not an unrestricted autonomous-a
 ## Persistence rule
 
 Durable state is treated as part of the cognitive architecture rather than an implementation detail. Future persistence work should extend this boundary to world-model state, task state, provenance, and memory lifecycle while retaining explicit versioning and auditability.
+
+
+## Prospective intention layer
+
+Astra-1 treats deferred intentions as a distinct durable state type rather than ordinary episodic memory. Each intention carries a typed cue (time, event, state, or manual), priority, lifecycle status, optional due time, provenance, payload, and optional bindings to goals, tasks, and executions.
+
+The runtime exposes creation, cue polling, and completion operations. Polling is an explicit trigger step: an intention becomes `due` only when its typed cue is observed. The intention store does not itself authorize or perform consequential actions.
+
+This separation reflects current prospective-memory research: deferred intentions require future-cue detection and lifecycle management, while long-term memory research shows that retrospective recall alone does not guarantee reliable future behavior.
