@@ -30,7 +30,7 @@ class PersistentRuntime:
         self.identity = identity
         self.memory = MemorySystem()
         self.retriever = SQLiteMemoryRetriever(self.store)
-        self.world = WorldModel()
+        snapshot = self.store.get_latest_world_snapshot()\n        self.world = WorldModel.from_snapshot(snapshot["snapshot"]) if snapshot else WorldModel()
         self.skills = SkillRegistry()
 
     def _emit(self, execution_id: int, sequence: int, stage: str, payload: object) -> dict:
