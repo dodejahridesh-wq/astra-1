@@ -44,3 +44,11 @@ This gives Astra-1 an explicit temporal loop:
 **Persist intention → observe cue → mark due → dispatch → execute → verify → complete or block → persist tick.**
 
 A future scheduler may invoke ticks from a clock, event stream, or external orchestrator; the core executive itself remains deterministic and testable.
+
+## Predictive world model and selective foresight
+
+The world model now retains empirical action-to-outcome transitions and prediction errors. `SelectiveForesight` derives a prediction only when repeated observed transitions provide sufficient empirical confidence; unsupported actions produce no prediction.
+
+Prediction is explicitly distinct from observation. A prediction carries its confidence, evidence count, and world-model version. When a prediction is later compared with an observation, the mismatch is retained as a prediction-error record rather than silently rewriting history.
+
+This is intentionally conservative. Astra-1 does not treat a generated forecast as fact, and it does not use low-confidence foresight merely because a model can produce a plausible narrative. The design is informed by recent work on self-evolving world models, episodic/semantic memory, prediction-observation mismatch, and selective foresight.
