@@ -69,6 +69,20 @@ with tempfile.TemporaryDirectory() as tmp:
                 and prediction.predicted_outcome == {"result": "found"}
                 and prediction.confidence >= 0.6
             )
+            if ok:
+                for _ in range(2):
+                    runtime.record_prediction_error(
+                        "benchmark.lookup",
+                        {"result": "found"},
+                        {"result": "missing"},
+                        prediction_confidence=prediction.confidence,
+                    )
+                snapshot = runtime.store.get_latest_world_snapshot()
+                ok = (
+                    len(snapshot["snapshot"]["prediction_errors"]) == 2
+                    and len(snapshot["snapshot"]["model_revisions"]) == 1
+                    and snapshot["snapshot"]["model_revisions"][0]["mismatch_count"] == 2
+                )
             passed += int(ok)
             print(case["id"], "PASS" if ok else "FAIL", "predicted" if ok else "filtered")
             continue
