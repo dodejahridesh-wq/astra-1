@@ -62,9 +62,9 @@ class AstraRequestHandler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765, database: str = "data/astra.db") -> None:
-    AstraRequestHandler.runtime = PersistentRuntime()
-    AstraRequestHandler.runtime.store.close()
-    AstraRequestHandler.runtime = PersistentRuntime()
+    from .storage import SQLiteStore
+
+    AstraRequestHandler.runtime = PersistentRuntime(store=SQLiteStore(database))
     server = ThreadingHTTPServer((host, port), AstraRequestHandler)
     print(f"Astra-1 service listening on http://{host}:{port}")
     try:
