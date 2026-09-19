@@ -182,7 +182,7 @@ class SQLiteStore:
         return result
 
     def finish_execution(self, execution_id: int, status: str, verified: bool) -> None:
-        state = "completed" if status == "completed" else "failed"
+        state = {"completed": "completed", "blocked": "blocked"}.get(status, "failed")
         with self._lock, self._conn:
             self._conn.execute(
                 """
