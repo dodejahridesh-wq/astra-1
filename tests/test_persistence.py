@@ -130,6 +130,34 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(store.get_intention(intention_id)["status"], "due")
             store.close()
 
+    def test_predictive_world_state_survives_reopen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "astra.db"
+            store = SQLiteStore(db)
+            runtime = PersistentRuntime(store=store)
+            runtime.record_transition("lookup", {"result": "found"})
+            runtime.record_transition("lookup", {"result": "found"})
+            runtime.record_transition("lookup", {"result": "missing"})
+            prediction = runtime.predict("lookup", min_confidence=0.6)
+            self.assertIsNotNone(prediction)
+            self.assertEqual(prediction.predicted_outcome, {"result": "found"})
+            store.close()
+
+            reopened = SQLiteStore(db)
+            restored = PersistentRuntime(store=reopened)
+            prediction = restored.predict("lookup", min_confidence=0.6)
+            self.assertIsNotNone(prediction)
+            self.assertEqual(prediction.predicted_outcome, {"result": "found"})
+            restored.record_prediction_error(
+                "lookup",
+                {"result": "found"},
+                {"result": "missing"},
+                prediction_confidence=2 / 3,
+            )
+            snapshot = reopened.get_latest_world_snapshot()
+            self.assertEqual(len(snapshot["snapshot"]["prediction_errors"]), 1)
+            reopened.close()
+
     def test_task_can_be_resumed(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteStore(Path(tmp) / "astra.db")
