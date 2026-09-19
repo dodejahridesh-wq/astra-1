@@ -72,6 +72,24 @@ class PersistenceTests(unittest.TestCase):
                 server.server_close()
                 AstraRequestHandler.runtime.store.close()
 
+    def test_runtime_exposes_prospective_intention_api(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            runtime = PersistentRuntime(store=store)
+            intention_id = runtime.create_intention(
+                "Review the benchmark output",
+                "event",
+                "benchmark.complete",
+                priority=5,
+                provenance="test",
+            )
+            self.assertEqual(
+                runtime.poll_intentions("event", "benchmark.complete")[0]["id"],
+                intention_id,
+            )
+            runtime.complete_intention(intention_id)
+            store.close()
+
     def test_task_can_be_resumed(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteStore(Path(tmp) / "astra.db")
