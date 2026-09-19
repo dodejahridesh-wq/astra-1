@@ -67,6 +67,19 @@ class PersistenceTests(unittest.TestCase):
                 server.server_close()
                 AstraRequestHandler.runtime.store.close()
 
+    def test_task_can_be_resumed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SQLiteStore(Path(tmp) / "astra.db")
+            runtime = PersistentRuntime(store=store)
+            task_id = runtime.create_task("resume this task")
+            result = runtime.resume_task(task_id)
+            self.assertEqual(result["status"], "completed")
+            self.assertTrue(result["resumed"])
+            task = store.get_task(task_id)
+            self.assertEqual(task["status"], "completed")
+            self.assertEqual(task["attempts"], 1)
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()
