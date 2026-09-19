@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-LATEST_SCHEMA_VERSION = 4
+LATEST_SCHEMA_VERSION = 5
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -39,6 +39,8 @@ class SQLiteStore:
                     self._migrate_v2_to_v3()
                 elif version == 3:
                     self._migrate_v3_to_v4()
+                elif version == 4:
+                    self._migrate_v4_to_v5()
                 else:
                     raise RuntimeError(f"unsupported Astra-1 schema version: {version}")
                 version += 1
@@ -204,6 +206,36 @@ class SQLiteStore:
             "CREATE INDEX IF NOT EXISTS idx_memory_active "
             "ON memory_items(status, valid_until, confidence, id)"
         )
+
+    def _migrate_v4_to_v5(self) -> None:
+        self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS intentions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                description TEXT NOT NULL,
+                cue_type TEXT NOT NULL,
+                cue_value TEXT NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                due_at TEXT,
+                goal_id INTEGER,
+                task_id INTEGER,
+                execution_id INTEGER,
+                provenance TEXT NOT NULL DEFAULT 'runtime',
+                payload TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                triggered_at TEXT,
+                FOREIGN KEY(goal_id) REFERENCES goals(id) ON DELETE SET NULL,
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+                FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_intentions_status_priority
+                ON intentions(status, priority DESC, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_intentions_cue
+                ON intentions(cue_type, cue_value, status);
+            CREATE INDEX IF NOT EXISTS idx_intentions_due
+                ON intentions(due_at, status);
+        """)
 
     def create_goal(self, goal: str, priority: int = 0) -> int:
         if not goal or not goal.strip():
@@ -432,6 +464,121 @@ class SQLiteStore:
                 (pattern, now, int(limit)),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def create_intention(
+        self,
+        description: str,
+        cue_type: str,
+        cue_value: str,
+        priority: int = 0,
+        *,
+        due_at: str | None = None,
+        goal_id: int | None = None,
+        task_id: int | None = None,
+        provenance: str = "runtime",
+        payload: Any | None = None,
+        status: str = "pending",
+    ) -> int:
+        if not description or not description.strip():
+            raise ValueError("intention description must be non-empty")
+        if cue_type not in {"time", "event", "state", "manual"}:
+            raise ValueError("unsupported intention cue_type")
+        if status not in {"pending", "armed", "due", "completed", "cancelled", "expired", "blocked"}:
+            raise ValueError("unsupported intention status")
+        now = utc_now()
+        serialized = "{}" if payload is None else (
+            payload if isinstance(payload, str) else json.dumps(payload, sort_keys=True)
+        )
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO intentions("
+                "description, cue_type, cue_value, priority, status, due_at, "
+                "goal_id, task_id, provenance, payload, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    description, cue_type, cue_value, int(priority), status, due_at,
+                    goal_id, task_id, provenance, serialized, now, now,
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def get_intention(self, intention_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM intentions WHERE id = ?", (intention_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        try:
+            result["payload"] = json.loads(result["payload"])
+        except json.JSONDecodeError:
+            pass
+        return result
+
+    def set_intention_status(
+        self,
+        intention_id: int,
+        status: str,
+        execution_id: int | None = None,
+    ) -> None:
+        if status not in {"pending", "armed", "due", "completed", "cancelled", "expired", "blocked"}:
+            raise ValueError("unsupported intention status")
+        now = utc_now()
+        triggered_at = now if status == "due" else None
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE intentions SET status = ?, "
+                "execution_id = COALESCE(?, execution_id), "
+                "triggered_at = COALESCE(?, triggered_at), updated_at = ? "
+                "WHERE id = ?",
+                (status, execution_id, triggered_at, now, int(intention_id)),
+            )
+
+    def list_due_intentions(
+        self,
+        cue_type: str,
+        cue_value: str | None = None,
+        *,
+        now: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        if cue_type not in {"time", "event", "state", "manual"}:
+            raise ValueError("unsupported intention cue_type")
+        current = now or utc_now()
+        clauses = ["cue_type = ?", "status IN ('pending', 'armed')"]
+        params: list[Any] = [cue_type]
+        if cue_type == "time":
+            clauses.append("due_at IS NOT NULL AND due_at <= ?")
+            params.append(current)
+        elif cue_value is not None:
+            clauses.append("cue_value = ?")
+            params.append(cue_value)
+        sql = (
+            "SELECT * FROM intentions WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY priority DESC, id ASC LIMIT ?"
+        )
+        params.append(int(limit))
+        with self._lock, self._conn:
+            rows = self._conn.execute(sql, tuple(params)).fetchall()
+            for row in rows:
+                self._conn.execute(
+                    "UPDATE intentions SET status = 'due', triggered_at = ?, updated_at = ? "
+                    "WHERE id = ?",
+                    (current, current, row["id"]),
+                )
+        results = []
+        for row in rows:
+            result = dict(row)
+            result["status"] = "due"
+            result["triggered_at"] = current
+            try:
+                result["payload"] = json.loads(result["payload"])
+            except json.JSONDecodeError:
+                pass
+            results.append(result)
+        return results
 
     def add_world_event(self, event: Any, execution_id: int | None = None) -> int:
         serialized = event if isinstance(event, str) else json.dumps(event, sort_keys=True)
