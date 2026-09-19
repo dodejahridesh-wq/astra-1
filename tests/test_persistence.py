@@ -27,7 +27,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(saved["mode"], "sandbox")
             self.assertTrue(saved["verified"])
             self.assertEqual(len(saved["events"]), 13)
-            self.assertEqual(len(reopened.get_world_events()), 1)
+            self.assertEqual(len(reopened.get_world_events()), 1)\n            snapshot = reopened.get_latest_world_snapshot()\n            self.assertIsNotNone(snapshot)\n            self.assertEqual(snapshot["version"], 1)\n            self.assertEqual(len(snapshot["snapshot"]["events"]), 1)
             reopened.close()
 
     def test_live_mode_is_blocked_without_authorization(self):
