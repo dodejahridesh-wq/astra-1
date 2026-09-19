@@ -129,6 +129,13 @@ class SQLiteStore:
                 (status, execution_id, utc_now(), task_id),
             )
 
+    def set_task_status(self, task_id: int, status: str, execution_id: int | None = None) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE tasks SET status = ?, execution_id = COALESCE(?, execution_id), updated_at = ? WHERE id = ?",
+                (status, execution_id, utc_now(), task_id),
+            )
+
     def get_task(self, task_id: int) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
