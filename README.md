@@ -31,6 +31,9 @@ Consolidate → Learn
 - Persistent SQLite execution runtime
 - Dependency-free local HTTP API for health, execution, and trace inspection
 - Durable execution/event history
+- Explicit SANDBOX / SIMULATION / LIVE execution modes with consequential-action blocking
+- Explicit execution state machine and evidence ledger
+- Pluggable retrieval and model-routing boundaries
 - Model-provider interface with a reproducible local substrate
 - Working / episodic / semantic / procedural / autobiographical memory model
 - Explicit versioned world model
@@ -71,7 +74,7 @@ python -m astra_core.service
 The local service exposes:
 
 - `GET /health`
-- `POST /run` with `{"goal":"..." }`
+- `POST /run` with `{"goal":"...", "mode":"sandbox"}`
 - `GET /trace/{execution_id}`
 
 The default persistent database is `data/astra.db`. No API key is required for the deterministic sandbox.
