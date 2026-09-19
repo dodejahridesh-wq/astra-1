@@ -77,8 +77,8 @@ class StorageMigrationTests(unittest.TestCase):
                 );
             """)
             conn.execute(
-                "INSERT INTO executions(identity, goal, status, mode, state, verified, created_at) "
-                "VALUES ('legacy', 'preserve me', 'completed', 'sandbox', 'completed', 1, "
+                "INSERT INTO executions(identity, goal, status, verified, created_at) "
+                "VALUES ('legacy', 'preserve me', 'completed', 1, "
                 "'2026-01-01T00:00:00+00:00')"
             )
             conn.execute(
