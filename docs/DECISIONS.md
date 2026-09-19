@@ -23,3 +23,10 @@ The reconciliation phase retains `astra_core` as the authoritative runtime packa
 ## Decision: migration compatibility is a release gate
 
 A persistence change is not considered complete until a fresh database reaches the latest schema and a representative legacy database migrates without loss of existing executions, memories, tasks, and world data. Migration tests are part of the normal regression suite and benchmark gate.
+
+
+## Decision: prospective memory is a separate state layer
+
+Deferred intentions will not be represented solely as episodic memories. Astra-1 uses a typed intention store with explicit cue type, lifecycle, priority, due state, provenance, and execution binding. The store can make an intention eligible when a cue is observed, but it cannot grant action authority or perform consequential actions by itself.
+
+This keeps retrospective memory, prospective intention state, and execution authorization distinct and inspectable.
