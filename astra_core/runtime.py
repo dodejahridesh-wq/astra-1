@@ -38,12 +38,25 @@ class PersistentRuntime:
         self.store.append_event(execution_id, sequence, stage, payload)
         return event
 
-    def run(self, goal: str, mode: ExecutionMode | str = ExecutionMode.SANDBOX) -> dict:
+    def create_task(self, goal: str) -> int:
+        return self.store.create_task(goal)
+
+    def resume_task(self, task_id: int, mode: ExecutionMode | str = ExecutionMode.SANDBOX) -> dict:
+        task = self.store.get_task(task_id)
+        if task is None:
+            raise ValueError("unknown task")
+        if task["status"] == "completed":
+            return {"task_id": task_id, "status": "completed", "execution_id": task["execution_id"]}
+        self.store.update_task(task_id, "resuming", task["execution_id"])
+        result = self.run(task["goal"], mode, task_id=task_id)
+        return {**result, "task_id": task_id, "resumed": True}
+
+    def run(self, goal: str, mode: ExecutionMode | str = ExecutionMode.SANDBOX, task_id: int | None = None) -> dict:
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError("goal must be a non-empty string")
         mode = ExecutionMode(mode)
         machine = ExecutionStateMachine()
-        execution_id = self.store.create_execution(self.identity, goal, mode.value)
+        execution_id = self.store.create_execution(self.identity, goal, mode.value, task_id=task_id)
         machine.transition(ExecutionState.RUNNING)
 
         events: list[dict] = []
@@ -84,6 +97,8 @@ class PersistentRuntime:
                 machine.transition(ExecutionState.BLOCKED)
                 self.store.update_execution_state(execution_id, machine.state.value)
                 self.store.finish_execution(execution_id, "blocked", False)
+                if task_id is not None:
+                    self.store.update_task(task_id, "blocked", execution_id)
                 return {
                     "execution_id": execution_id,
                     "goal": goal,
@@ -152,6 +167,8 @@ class PersistentRuntime:
 
             machine.transition(ExecutionState.COMPLETED)
             self.store.finish_execution(execution_id, "completed", verification.passed)
+            if task_id is not None:
+                self.store.update_task(task_id, "completed", execution_id)
             return {
                 "execution_id": execution_id,
                 "goal": goal,
@@ -168,4 +185,6 @@ class PersistentRuntime:
                 if machine.state in {ExecutionState.RUNNING, ExecutionState.VERIFYING}:
                     machine.transition(ExecutionState.FAILED)
             self.store.finish_execution(execution_id, "failed", False)
+            if task_id is not None:
+                self.store.update_task(task_id, "failed", execution_id)
             raise
