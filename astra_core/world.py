@@ -12,6 +12,8 @@ class WorldModel:
     events: list[dict[str, Any]] = field(default_factory=list)
     hypotheses: list[dict[str, Any]] = field(default_factory=list)
     assumptions: list[dict[str, Any]] = field(default_factory=list)
+    transitions: list[dict[str, Any]] = field(default_factory=list)
+    prediction_errors: list[dict[str, Any]] = field(default_factory=list)
     version: int = 0
 
     def observe(self, event: Any, provenance: str = "runtime", confidence: float = 1.0) -> int:
@@ -36,6 +38,46 @@ class WorldModel:
 
     def add_assumption(self, statement: str, provenance: str = "runtime") -> int:
         self.assumptions.append({"statement": statement, "provenance": provenance})
+        self.version += 1
+        return self.version
+
+    def record_transition(
+        self,
+        action: str,
+        outcome: Any,
+        provenance: str = "observation",
+        confidence: float = 1.0,
+    ) -> int:
+        self.transitions.append({
+            "action": action,
+            "outcome": outcome,
+            "provenance": provenance,
+            "confidence": float(confidence),
+        })
+        self.version += 1
+        return self.version
+
+    def transition_history(self, action: str) -> list[dict[str, Any]]:
+        return [item for item in self.transitions if item["action"] == action]
+
+    def record_prediction_error(
+        self,
+        action: str,
+        predicted: Any,
+        observed: Any,
+        *,
+        prediction_confidence: float,
+        provenance: str = "runtime",
+    ) -> int:
+        error = {
+            "action": action,
+            "predicted": predicted,
+            "observed": observed,
+            "prediction_confidence": float(prediction_confidence),
+            "matched": predicted == observed,
+            "provenance": provenance,
+        }
+        self.prediction_errors.append(error)
         self.version += 1
         return self.version
 
