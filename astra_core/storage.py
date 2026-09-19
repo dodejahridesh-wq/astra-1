@@ -1,8 +1,4 @@
-"""Durable SQLite storage for Astra-1 execution state and provenance.
-
-The storage layer is deliberately dependency-free so the deterministic research
-runtime can be reproduced on a clean Python installation.
-"""
+"""Durable SQLite storage for Astra-1 execution state and provenance."""
 from __future__ import annotations
 
 import json
@@ -18,7 +14,7 @@ def utc_now() -> str:
 
 
 class SQLiteStore:
-    """Small transactional store for executions, events, and memory items."""
+    """Small transactional store for executions, events, memory, and world observations."""
 
     def __init__(self, path: str | Path = "data/astra.db"):
         self.path = str(path)
@@ -40,6 +36,8 @@ class SQLiteStore:
                     identity TEXT NOT NULL,
                     goal TEXT NOT NULL,
                     status TEXT NOT NULL,
+                    mode TEXT NOT NULL DEFAULT 'sandbox',
+                    state TEXT NOT NULL DEFAULT 'created',
                     verified INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     completed_at TEXT
@@ -67,21 +65,53 @@ class SQLiteStore:
                     FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS world_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    execution_id INTEGER,
+                    event TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(execution_id) REFERENCES executions(id) ON DELETE SET NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_events_execution
                     ON execution_events(execution_id, sequence);
                 CREATE INDEX IF NOT EXISTS idx_memory_store
                     ON memory_items(store_name, created_at);
+                CREATE INDEX IF NOT EXISTS idx_world_events_created
+                    ON world_events(created_at);
                 """
             )
+            columns = {
+                row["name"]
+                for row in self._conn.execute("PRAGMA table_info(executions)").fetchall()
+            }
+            if "mode" not in columns:
+                self._conn.execute(
+                    "ALTER TABLE executions ADD COLUMN mode TEXT NOT NULL DEFAULT 'sandbox'"
+                )
+            if "state" not in columns:
+                self._conn.execute(
+                    "ALTER TABLE executions ADD COLUMN state TEXT NOT NULL DEFAULT 'created'"
+                )
 
-    def create_execution(self, identity: str, goal: str) -> int:
+    def create_execution(self, identity: str, goal: str, mode: str = "sandbox") -> int:
         now = utc_now()
         with self._lock, self._conn:
             cur = self._conn.execute(
-                "INSERT INTO executions(identity, goal, status, created_at) VALUES (?, ?, ?, ?)",
-                (identity, goal, "running", now),
+                """
+                INSERT INTO executions(identity, goal, status, mode, state, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (identity, goal, "running", mode, "running", now),
             )
             return int(cur.lastrowid)
+
+    def update_execution_state(self, execution_id: int, state: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE executions SET state = ? WHERE id = ?",
+                (state, execution_id),
+            )
 
     def append_event(self, execution_id: int, sequence: int, stage: str, payload: Any) -> None:
         serialized = payload if isinstance(payload, str) else json.dumps(payload, sort_keys=True)
@@ -114,15 +144,38 @@ class SQLiteStore:
             )
             return int(cur.lastrowid)
 
+    def add_world_event(self, event: Any, execution_id: int | None = None) -> int:
+        serialized = event if isinstance(event, str) else json.dumps(event, sort_keys=True)
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO world_events(execution_id, event, created_at) VALUES (?, ?, ?)",
+                (execution_id, serialized, utc_now()),
+            )
+            return int(cur.lastrowid)
+
+    def get_world_events(self) -> list[Any]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT event FROM world_events ORDER BY id"
+            ).fetchall()
+        result = []
+        for row in rows:
+            try:
+                result.append(json.loads(row["event"]))
+            except json.JSONDecodeError:
+                result.append(row["event"])
+        return result
+
     def finish_execution(self, execution_id: int, status: str, verified: bool) -> None:
+        state = "completed" if status == "completed" else "failed"
         with self._lock, self._conn:
             self._conn.execute(
                 """
                 UPDATE executions
-                SET status = ?, verified = ?, completed_at = ?
+                SET status = ?, state = ?, verified = ?, completed_at = ?
                 WHERE id = ?
                 """,
-                (status, int(verified), utc_now(), execution_id),
+                (status, state, int(verified), utc_now(), execution_id),
             )
 
     def get_execution(self, execution_id: int) -> dict[str, Any] | None:
@@ -146,6 +199,8 @@ class SQLiteStore:
             "identity": row["identity"],
             "goal": row["goal"],
             "status": row["status"],
+            "mode": row["mode"],
+            "state": row["state"],
             "verified": bool(row["verified"]),
             "created_at": row["created_at"],
             "completed_at": row["completed_at"],
