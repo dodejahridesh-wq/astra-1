@@ -84,10 +84,10 @@ class PersistentRuntime:
             ))
 
             model = self.router.generate(goal)
-            events.append(self._emit(execution_id, 4, "Model", model.text))
+            events.append(self._emit(execution_id, 5, "Model", model.text))
 
             plan = self.router.generate(goal, "planner")
-            events.append(self._emit(execution_id, 5, "Plan", plan.text))
+            events.append(self._emit(execution_id, 6, "Plan", plan.text))
 
             events.append(self._emit(
                 execution_id, 7, "Simulate",
