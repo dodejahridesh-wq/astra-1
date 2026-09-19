@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-LATEST_SCHEMA_VERSION = 5
+LATEST_SCHEMA_VERSION = 6
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -41,6 +41,8 @@ class SQLiteStore:
                     self._migrate_v3_to_v4()
                 elif version == 4:
                     self._migrate_v4_to_v5()
+                elif version == 5:
+                    self._migrate_v5_to_v6()
                 else:
                     raise RuntimeError(f"unsupported Astra-1 schema version: {version}")
                 version += 1
@@ -235,6 +237,21 @@ class SQLiteStore:
                 ON intentions(cue_type, cue_value, status);
             CREATE INDEX IF NOT EXISTS idx_intentions_due
                 ON intentions(due_at, status);
+        """)
+
+    def _migrate_v5_to_v6(self) -> None:
+        self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS executive_ticks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                observed_at TEXT NOT NULL,
+                due_intentions TEXT NOT NULL,
+                dispatched_intentions TEXT NOT NULL,
+                completed_intentions TEXT NOT NULL,
+                blocked_intentions TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_executive_ticks_observed
+                ON executive_ticks(observed_at, id);
         """)
 
     def create_goal(self, goal: str, priority: int = 0) -> int:
@@ -579,6 +596,53 @@ class SQLiteStore:
                 pass
             results.append(result)
         return results
+
+    def record_executive_tick(
+        self,
+        observed_at: str,
+        due_intentions: Any,
+        dispatched_intentions: Any,
+        completed_intentions: Any,
+        blocked_intentions: Any,
+    ) -> int:
+        now = utc_now()
+        values = [
+            json.dumps(value, sort_keys=True)
+            for value in (
+                due_intentions,
+                dispatched_intentions,
+                completed_intentions,
+                blocked_intentions,
+            )
+        ]
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO executive_ticks("
+                "observed_at, due_intentions, dispatched_intentions, "
+                "completed_intentions, blocked_intentions, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (observed_at, *values, now),
+            )
+            return int(cur.lastrowid)
+
+    def get_executive_ticks(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM executive_ticks ORDER BY id DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            for key in (
+                "due_intentions",
+                "dispatched_intentions",
+                "completed_intentions",
+                "blocked_intentions",
+            ):
+                item[key] = json.loads(item[key])
+            result.append(item)
+        return result
 
     def add_world_event(self, event: Any, execution_id: int | None = None) -> int:
         serialized = event if isinstance(event, str) else json.dumps(event, sort_keys=True)
