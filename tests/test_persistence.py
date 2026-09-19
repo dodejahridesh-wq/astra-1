@@ -158,6 +158,29 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(len(snapshot["snapshot"]["prediction_errors"]), 1)
             reopened.close()
 
+    def test_prediction_error_revision_survives_reopen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "astra.db"
+            store = SQLiteStore(db)
+            runtime = PersistentRuntime(store=store)
+            for _ in range(2):
+                runtime.record_prediction_error(
+                    "lookup",
+                    {"result": "found"},
+                    {"result": "missing"},
+                    prediction_confidence=0.9,
+                )
+            store.close()
+
+            reopened = SQLiteStore(db)
+            restored = PersistentRuntime(store=reopened)
+            snapshot = reopened.get_latest_world_snapshot()
+            self.assertEqual(len(snapshot["snapshot"]["prediction_errors"]), 2)
+            self.assertEqual(len(snapshot["snapshot"]["model_revisions"]), 1)
+            self.assertEqual(snapshot["snapshot"]["model_revisions"][0]["mismatch_count"], 2)
+            self.assertEqual(restored.world.hypotheses[-1]["expected_outcome"], {"result": "missing"})
+            reopened.close()
+
     def test_task_can_be_resumed(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SQLiteStore(Path(tmp) / "astra.db")
