@@ -9,6 +9,7 @@ from astra_core.retrieval import MemoryRetriever
 from astra_core.memory import MemorySystem
 from astra_core.models import DeterministicProvider
 from astra_core.router import ModelRouter
+from astra_core.scheduling import CognitiveScheduler
 
 
 class RuntimeArchitectureTests(unittest.TestCase):
@@ -40,6 +41,15 @@ class RuntimeArchitectureTests(unittest.TestCase):
         router = ModelRouter(DeterministicProvider())
         response = router.generate("test", "planner")
         self.assertEqual(response.provenance, "sandbox-model")
+
+    def test_scheduler_allocates_bounded_profiles(self):
+        scheduler = CognitiveScheduler()
+        fast = scheduler.schedule("check status")
+        deep = scheduler.schedule("research and analyze this complex design and verify the evidence carefully")
+        self.assertEqual(fast.profile, "fast")
+        self.assertEqual(deep.profile, "deep")
+        self.assertLessEqual(fast.budget.max_model_calls, 5)
+        self.assertGreater(deep.budget.retrieval_limit, fast.budget.retrieval_limit)
 
 
 if __name__ == "__main__":
