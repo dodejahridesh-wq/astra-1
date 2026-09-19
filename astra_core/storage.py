@@ -31,7 +31,17 @@ class SQLiteStore:
                 """
                 PRAGMA foreign_keys = ON;
 
-                CREATE TABLE IF NOT EXISTS tasks (\n                    id INTEGER PRIMARY KEY AUTOINCREMENT,\n                    goal TEXT NOT NULL,\n                    status TEXT NOT NULL DEFAULT 'queued',\n                    attempts INTEGER NOT NULL DEFAULT 0,\n                    execution_id INTEGER,\n                    created_at TEXT NOT NULL,\n                    updated_at TEXT NOT NULL\n                );\n\n                CREATE TABLE IF NOT EXISTS executions (
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    goal TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    execution_id INTEGER,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS executions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     identity TEXT NOT NULL,
                     goal TEXT NOT NULL,
@@ -235,7 +245,8 @@ class SQLiteStore:
         if row is None:
             return None
         return {"version": row["version"], "snapshot": json.loads(row["snapshot"])}
-\n    def finish_execution(self, execution_id: int, status: str, verified: bool) -> None:
+
+    def finish_execution(self, execution_id: int, status: str, verified: bool) -> None:
         state = {"completed": "completed", "blocked": "blocked"}.get(status, "failed")
         with self._lock, self._conn:
             self._conn.execute(
